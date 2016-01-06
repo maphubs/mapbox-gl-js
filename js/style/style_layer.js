@@ -234,7 +234,7 @@ StyleLayer.prototype = util.inherit(Evented, {
     recalculateStatic: function() {
         for (var paintName in this._paintSpecifications) {
             if (!(paintName in this._paintTransitions))
-                this.paint[paintName] = this.getPaintValue(paintName);
+                this.paint[paintName] = this.getPaintValue(paintName, {}, {});
         }
         this._layoutFunctions = {};
         for (var layoutName in this._layoutSpecifications) {
@@ -242,7 +242,7 @@ StyleLayer.prototype = util.inherit(Evented, {
             if (declaration && declaration.isFunction) {
                 this._layoutFunctions[layoutName] = true;
             } else {
-                this.layout[layoutName] = this.getLayoutValue(layoutName);
+                this.layout[layoutName] = this.getLayoutValue(layoutName, {}, {});
             }
         }
     },

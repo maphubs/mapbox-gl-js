@@ -15,9 +15,9 @@ function parseColor(input) {
         return input;
 
     // GL function
-    } else if (input && input.stops) {
+    } else if (input && input.range) {
         return util.extend({}, input, {
-            stops: input.stops.map(parseFunctionStopColor)
+            range: input.range.map(parseColor)
         });
 
     // Color string
@@ -33,10 +33,6 @@ function parseColor(input) {
         throw new Error('Invalid color ' + input);
     }
 
-}
-
-function parseFunctionStopColor(stop) {
-    return [stop[0], parseColor(stop[1])];
 }
 
 function colorDowngrade(color) {

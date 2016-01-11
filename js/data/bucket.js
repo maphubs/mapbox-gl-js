@@ -234,12 +234,33 @@ Bucket.prototype.createFilter = function() {
 
 var createVertexAddMethodCache = {};
 function createVertexAddMethod(shaderName, shaderInterface, bufferName) {
+    var body = '';
+
     var pushArgs = [];
     for (var i = 0; i < shaderInterface.attributes.length; i++) {
-        pushArgs = pushArgs.concat(shaderInterface.attributes[i].value);
+        var attribute = shaderInterface.attributes[i];
+
+        var attributePushArgs = [];
+        if (Array.isArray(attribute.value)) {
+            attributePushArgs = attribute.value;
+        } else {
+            var attributeId = '_' + i;
+            body += 'var ' + attributeId + ' = ' + attribute.value + ';';
+            for (var j = 0; j < attribute.components; j++) {
+                attributePushArgs.push(attributeId + '[' + j + ']');
+            }
+        }
+
+        if (attribute.multiplier) {
+            for (var k = 0; k < attributePushArgs.length; k++) {
+                attributePushArgs[k] += '*' + attribute.multiplier;
+            }
+        }
+
+        pushArgs = pushArgs.concat(attributePushArgs);
     }
 
-    var body = 'return this.buffers.' + bufferName + '.push(' + pushArgs.join(', ') + ');';
+    body += 'return this.buffers.' + bufferName + '.push(' + pushArgs.join(',') + ');';
 
     if (!createVertexAddMethodCache[body]) {
         createVertexAddMethodCache[body] = new Function(shaderInterface.attributeArgs, body);

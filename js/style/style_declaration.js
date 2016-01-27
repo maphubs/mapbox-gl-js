@@ -9,7 +9,6 @@ function StyleDeclaration(reference, value) {
     this.type = reference.type;
     this.transitionable = reference.transition;
     this.value = value;
-    this.isFunction = !!value.stops;
 
     // immutable representation of value. used for comparison
     this.json = JSON.stringify(this.value);

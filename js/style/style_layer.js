@@ -100,7 +100,7 @@ StyleLayer.prototype = util.inherit(Evented, {
         var declaration = this._layoutDeclarations[name];
 
         if (declaration) {
-            return declaration.calculate(globalProperties, featureProperties);
+            return declaration.calculate(globalProperties || {}, featureProperties || {});
         } else {
             return specification.default;
         }
@@ -165,11 +165,21 @@ StyleLayer.prototype = util.inherit(Evented, {
         var transition = this._paintTransitions[name];
 
         if (transition) {
-            return transition.calculate(globalProperties, featureProperties);
+            return transition.calculate(globalProperties || {}, featureProperties || {});
         } else if (specification.type === 'color' && specification.default) {
             return parseColor(specification.default);
         } else {
             return specification.default;
+        }
+    },
+
+    isPaintValueFeatureConstant: function(name) {
+        var transition = this._paintTransitions[name];
+
+        if (transition) {
+            return transition.declaration.isFeatureConstant;
+        } else {
+            return true;
         }
     },
 
@@ -234,15 +244,15 @@ StyleLayer.prototype = util.inherit(Evented, {
     recalculateStatic: function() {
         for (var paintName in this._paintSpecifications) {
             if (!(paintName in this._paintTransitions))
-                this.paint[paintName] = this.getPaintValue(paintName, {}, {});
+                this.paint[paintName] = this.getPaintValue(paintName);
         }
-        this._layoutFunctions = {};
+        this._layoutFunctionDeclarations = {};
         for (var layoutName in this._layoutSpecifications) {
             var declaration = this._layoutDeclarations[layoutName];
-            if (declaration && declaration.isFunction) {
-                this._layoutFunctions[layoutName] = true;
+            if (declaration && !declaration.isGlobalConstant) {
+                this._layoutFunctionDeclarations[layoutName] = true;
             } else {
-                this.layout[layoutName] = this.getLayoutValue(layoutName, {}, {});
+                this.layout[layoutName] = this.getLayoutValue(layoutName);
             }
         }
     },
@@ -250,10 +260,12 @@ StyleLayer.prototype = util.inherit(Evented, {
     // update zoom
     recalculate: function(zoom, zoomHistory) {
         for (var paintName in this._paintTransitions) {
-            this.paint[paintName] = this.getPaintValue(paintName, {$zoom: zoom, $zoomHistory: zoomHistory});
+            if (this.isPaintValueFeatureConstant(paintName)) {
+                this.paint[paintName] = this.getPaintValue(paintName, {$zoom: zoom, $zoomHistory: zoomHistory});
+            }
         }
 
-        for (var layoutName in this._layoutFunctions) {
+        for (var layoutName in this._layoutFunctionDeclarations) {
             this.layout[layoutName] = this.getLayoutValue(layoutName, {$zoom: zoom, $zoomHistory: zoomHistory});
         }
     },

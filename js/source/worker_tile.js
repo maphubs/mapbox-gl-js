@@ -22,7 +22,8 @@ WorkerTile.prototype.parse = function(data, layers, actor, callback) {
 
     this.status = 'parsing';
 
-    this.featureTree = new FeatureTree(this.coord, this.overscaling);
+    var collisionTile = new CollisionTile(this.angle, this.pitch);
+    this.featureTree = new FeatureTree(this.coord, this.overscaling, collisionTile);
 
     var stats = { _total: 0 };
 
@@ -63,7 +64,7 @@ WorkerTile.prototype.parse = function(data, layers, actor, callback) {
     for (i = 0; i < layers.length; i++) {
         layer = layers[i];
         if (layer.source === this.source && layer.ref && bucketsById[layer.ref]) {
-            bucketsById[layer.ref].layers.push(layer.id);
+            bucketsById[layer.ref].layerIDs.push(layer.id);
         }
     }
 
@@ -92,8 +93,6 @@ WorkerTile.prototype.parse = function(data, layers, actor, callback) {
     var buckets = [],
         symbolBuckets = this.symbolBuckets = [],
         otherBuckets = [];
-
-    var collisionTile = new CollisionTile(this.angle, this.pitch);
 
     for (var id in bucketsById) {
         bucket = bucketsById[id];
@@ -165,10 +164,10 @@ WorkerTile.prototype.parse = function(data, layers, actor, callback) {
         bucket.addFeatures(collisionTile, stacks, icons);
         var time = Date.now() - now;
 
-        if (bucket.interactive) {
+        if (bucket.interactive && bucket.type !== 'symbol') {
             for (var i = 0; i < bucket.features.length; i++) {
                 var feature = bucket.features[i];
-                tile.featureTree.insert(feature.bbox(), bucket.layers, feature);
+                tile.featureTree.insert(feature.bbox(), bucket.layerIDs, feature);
             }
         }
 
@@ -207,6 +206,8 @@ WorkerTile.prototype.redoPlacement = function(angle, pitch, collisionDebug) {
 
     var buffers = {},
         collisionTile = new CollisionTile(angle, pitch);
+
+    this.featureTree.setCollisionTile(collisionTile);
 
     for (var i = this.symbolBuckets.length - 1; i >= 0; i--) {
         this.symbolBuckets[i].placeFeatures(collisionTile, buffers, collisionDebug);

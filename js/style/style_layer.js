@@ -34,7 +34,6 @@ function StyleLayer(layer, refLayer) {
     this.minzoom = (refLayer || layer).minzoom;
     this.maxzoom = (refLayer || layer).maxzoom;
     this.filter = (refLayer || layer).filter;
-    this.interactive = (refLayer || layer).interactive;
 
     this._paintSpecifications = styleSpec['paint_' + this.type];
     this._layoutSpecifications = styleSpec['layout_' + this.type];
@@ -242,8 +241,7 @@ StyleLayer.prototype = util.inherit(Evented, {
             'ref': this.ref,
             'metadata': this.metadata,
             'minzoom': this.minzoom,
-            'maxzoom': this.maxzoom,
-            'interactive': this.interactive
+            'maxzoom': this.maxzoom
         };
 
         for (var klass in this._paintDeclarations) {

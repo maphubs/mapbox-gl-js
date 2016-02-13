@@ -173,6 +173,10 @@ VideoSource.prototype = util.inherit(Evented, /** @lends VideoSource.prototype *
         return callback(null, []);
     },
 
+    getTileData: function(params, callback) {
+        return callback(null, []);
+    },
+
     serialize: function() {
         return {
             type: 'video',

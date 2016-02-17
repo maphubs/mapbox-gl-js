@@ -145,11 +145,7 @@ ImageSource.prototype = util.inherit(Evented, {
      * be selectable, so always return an empty array.
      * @private
      */
-    featuresAt: function(point, params, callback) {
-        return callback(null, []);
-    },
-
-    featuresIn: function(bbox, params, callback) {
+    queryFeatures: function(point, params, callback) {
         return callback(null, []);
     },
 

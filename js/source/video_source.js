@@ -165,11 +165,7 @@ VideoSource.prototype = util.inherit(Evented, /** @lends VideoSource.prototype *
         return this.tile;
     },
 
-    featuresAt: function(point, params, callback) {
-        return callback(null, []);
-    },
-
-    featuresIn: function(bbox, params, callback) {
+    queryFeatures: function(point, params, callback) {
         return callback(null, []);
     },
 

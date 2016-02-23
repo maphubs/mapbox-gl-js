@@ -402,7 +402,7 @@ Style.prototype = util.inherit(Evented, {
         }, function(value) { return value !== undefined; });
     },
 
-    queryFeatures: function(queryGeometry, params, classes, zoom, bearing, callback) {
+    queryRenderedFeatures: function(queryGeometry, params, classes, zoom, bearing, callback) {
         var features = [];
         var error = null;
 
@@ -412,7 +412,7 @@ Style.prototype = util.inherit(Evented, {
 
         util.asyncAll(Object.keys(this.sources), function(id, callback) {
             var source = this.sources[id];
-            source.queryFeatures(queryGeometry, params, classes, zoom, bearing, function(err, result) {
+            source.queryRenderedFeatures(queryGeometry, params, classes, zoom, bearing, function(err, result) {
                 if (result) features = features.concat(result);
                 if (err) error = err;
                 callback();

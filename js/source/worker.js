@@ -170,7 +170,7 @@ util.extend(Worker.prototype, {
         this.loaded[source][params.uid] = tile;
     },
 
-    'query features': function(params, callback) {
+    'query rendered features': function(params, callback) {
         var tile = this.loaded[params.source] && this.loaded[params.source][params.uid];
         if (tile) {
 
@@ -197,7 +197,7 @@ util.extend(Worker.prototype, {
         }
     },
 
-    'get tile data': function(params, callback) {
+    'query source features': function(params, callback) {
         var tile = this.loaded[params.source] && this.loaded[params.source][params.uid];
         if (tile) {
             callback(null, tile.getData(params.params));

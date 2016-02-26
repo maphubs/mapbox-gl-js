@@ -75,7 +75,12 @@ var Evented = {
      * @returns {Object} `this`
      */
     fire: function(type, data) {
-        if (!this.listens(type)) return this;
+        if (!this.listens(type)) {
+            if (util.endsWith(type, 'error')) {
+                console.error(data && data.error);
+            }
+            return this;
+        }
 
         data = util.extend({}, data);
         util.extend(data, {type: type, target: this});

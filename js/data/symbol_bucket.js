@@ -28,6 +28,7 @@ function SymbolBucket(options) {
     Bucket.apply(this, arguments);
     this.collisionDebug = options.collisionDebug;
     this.overscaling = options.overscaling;
+    this.collisionBoxArray = options.collisionBoxArray;
 
     // To reduce the number of labels that jump around when zooming we need
     // to use a text-size value that is the same for all zoom levels.
@@ -223,14 +224,15 @@ SymbolBucket.prototype.addFeatures = function(collisionTile, stacks, icons) {
         }
 
         if (shapedText || shapedIcon) {
-            this.addFeature(geometries[k], shapedText, shapedIcon, features[k]);
+            // TODO WRONG
+            this.addFeature(geometries[k], shapedText, shapedIcon, k);
         }
     }
 
     this.placeFeatures(collisionTile, this.buffers, this.collisionDebug);
 };
 
-SymbolBucket.prototype.addFeature = function(lines, shapedText, shapedIcon, feature) {
+SymbolBucket.prototype.addFeature = function(lines, shapedText, shapedIcon, featureIndex) {
     var layout = this.layer.layout;
 
     var glyphSize = 24;
@@ -303,7 +305,7 @@ SymbolBucket.prototype.addFeature = function(lines, shapedText, shapedIcon, feat
             var addToBuffers = inside || mayOverlap;
 
             this.symbolInstances.push(new SymbolInstance(anchor, line, shapedText, shapedIcon, layout,
-                        addToBuffers, this.symbolInstances.length, feature, this.layerIDs,
+                        addToBuffers, this.symbolInstances.length, this.collisionBoxArray, featureIndex, 0, 0,
                         textBoxScale, textPadding, textAlongLine,
                         iconBoxScale, iconPadding, iconAlongLine));
         }
@@ -503,10 +505,9 @@ SymbolBucket.prototype.addToDebugBuffers = function(collisionTile) {
         for (var i = 0; i < 2; i++) {
             var feature = this.symbolInstances[j][i === 0 ? 'textCollisionFeature' : 'iconCollisionFeature'];
             if (!feature) continue;
-            var boxes = feature.boxes;
 
-            for (var b = 0; b < boxes.length; b++) {
-                var box = boxes[b];
+            for (var b = feature.boxStartIndex; b < feature.boxEndIndex; b++) {
+                var box = this.collisionBoxArray.at(b);
                 var anchorPoint = box.anchorPoint;
 
                 var tl = new Point(box.x1, box.y1 * yStretch)._rotate(angle);
@@ -531,7 +532,7 @@ SymbolBucket.prototype.addToDebugBuffers = function(collisionTile) {
     }
 };
 
-function SymbolInstance(anchor, line, shapedText, shapedIcon, layout, addToBuffers, index, feature, layerIDs,
+function SymbolInstance(anchor, line, shapedText, shapedIcon, layout, addToBuffers, index, collisionBoxArray, featureIndex, sourceLayerIndex, bucketIndex,
                         textBoxScale, textPadding, textAlongLine,
                         iconBoxScale, iconPadding, iconAlongLine) {
 
@@ -543,11 +544,13 @@ function SymbolInstance(anchor, line, shapedText, shapedIcon, layout, addToBuffe
 
     if (this.hasText) {
         this.glyphQuads = addToBuffers ? getGlyphQuads(anchor, shapedText, textBoxScale, line, layout, textAlongLine) : [];
-        this.textCollisionFeature = new CollisionFeature(line, anchor, feature, layerIDs, shapedText, textBoxScale, textPadding, textAlongLine, false);
+        this.textCollisionFeature = new CollisionFeature(collisionBoxArray, line, anchor, featureIndex, sourceLayerIndex, bucketIndex,
+                shapedText, textBoxScale, textPadding, textAlongLine, false);
     }
 
     if (this.hasIcon) {
         this.iconQuads = addToBuffers ? getIconQuads(anchor, shapedIcon, iconBoxScale, line, layout, iconAlongLine) : [];
-        this.iconCollisionFeature = new CollisionFeature(line, anchor, feature, layerIDs, shapedIcon, iconBoxScale, iconPadding, iconAlongLine, true);
+        this.iconCollisionFeature = new CollisionFeature(collisionBoxArray, line, anchor, featureIndex, sourceLayerIndex, bucketIndex,
+                shapedIcon, iconBoxScale, iconPadding, iconAlongLine, true);
     }
 }

@@ -4,6 +4,7 @@ var FeatureTree = require('../data/feature_tree');
 var CollisionTile = require('../symbol/collision_tile');
 var Bucket = require('../data/bucket');
 var featureFilter = require('feature-filter');
+var CollisionBoxArray = require('../symbol/collision_box');
 
 module.exports = WorkerTile;
 
@@ -24,7 +25,8 @@ WorkerTile.prototype.parse = function(data, layers, actor, callback) {
     this.status = 'parsing';
     this.data = data;
 
-    var collisionTile = new CollisionTile(this.angle, this.pitch);
+    this.collisionBoxArray = new CollisionBoxArray();
+    var collisionTile = new CollisionTile(this.angle, this.pitch, this.collisionBoxArray);
     this.featureTree = new FeatureTree(this.coord, this.overscaling, collisionTile);
 
     var stats = { _total: 0 };
@@ -50,7 +52,8 @@ WorkerTile.prototype.parse = function(data, layers, actor, callback) {
             buffers: buffers,
             zoom: this.zoom,
             overscaling: this.overscaling,
-            collisionDebug: this.collisionDebug
+            collisionDebug: this.collisionDebug,
+            collisionBoxArray: this.collisionBoxArray
         });
 
         bucketsById[layer.id] = bucket;
@@ -207,7 +210,7 @@ WorkerTile.prototype.redoPlacement = function(angle, pitch, collisionDebug) {
     }
 
     var buffers = {},
-        collisionTile = new CollisionTile(angle, pitch);
+        collisionTile = new CollisionTile(angle, pitch, this.collisionBoxArray);
 
     this.featureTree.setCollisionTile(collisionTile);
 

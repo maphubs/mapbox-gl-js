@@ -224,8 +224,7 @@ SymbolBucket.prototype.addFeatures = function(collisionTile, stacks, icons) {
         }
 
         if (shapedText || shapedIcon) {
-            // TODO WRONG
-            this.addFeature(geometries[k], shapedText, shapedIcon, k);
+            this.addFeature(geometries[k], shapedText, shapedIcon, features[k].index);
         }
     }
 
@@ -305,7 +304,7 @@ SymbolBucket.prototype.addFeature = function(lines, shapedText, shapedIcon, feat
             var addToBuffers = inside || mayOverlap;
 
             this.symbolInstances.push(new SymbolInstance(anchor, line, shapedText, shapedIcon, layout,
-                        addToBuffers, this.symbolInstances.length, this.collisionBoxArray, featureIndex, 0, 0,
+                        addToBuffers, this.symbolInstances.length, this.collisionBoxArray, featureIndex, this.sourceLayerIndex, this.index,
                         textBoxScale, textPadding, textAlongLine,
                         iconBoxScale, iconPadding, iconAlongLine));
         }

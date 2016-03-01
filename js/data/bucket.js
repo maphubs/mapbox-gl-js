@@ -77,7 +77,8 @@ function Bucket(options) {
     this.minZoom = this.layer.minzoom;
     this.maxZoom = this.layer.maxzoom;
 
-    this.createStyleLayer();
+    // TODO make this call more efficient or unnescessary
+    this.createStyleLayers(options.style);
     this.attributes = {};
     for (var interfaceName in this.shaderInterfaces) {
         var interfaceAttributes = this.attributes[interfaceName] = { enabled: [], disabled: [] };
@@ -221,18 +222,18 @@ Bucket.prototype.trimBuffers = function() {
  * @param {number} offset The offset of the attribute data in the currently bound GL buffer.
  * @param {Array} arguments to be passed to disabled attribute value functions
  */
-Bucket.prototype.setAttribPointers = function(shaderName, gl, glShader, offset, args) {
+Bucket.prototype.setAttribPointers = function(shaderName, gl, shader, offset, args) {
     // Set disabled attributes
     var disabledAttributes = this.attributes[shaderName].disabled;
     for (var i = 0; i < disabledAttributes.length; i++) {
         var attribute = disabledAttributes[i];
-        var glAttribute = glShader['a_' + attribute.name];
-        gl.disableVertexAttribArray(glAttribute);
-        gl['vertexAttrib' + attribute.components + 'fv'](glAttribute, attribute.getValue.apply(this, args));
+        var attributeId = shader['a_' + attribute.name];
+        gl.disableVertexAttribArray(attributeId);
+        gl['vertexAttrib' + attribute.components + 'fv'](attributeId, attribute.getValue.apply(this, args));
     }
 
     // Set enabled attributes
-    this.buffers[this.getBufferName(shaderName, 'vertex')].setAttribPointers(gl, glShader, offset);
+    this.buffers[this.getBufferName(shaderName, 'vertex')].setAttribPointers(gl, shader, offset);
 };
 
 /**
@@ -242,15 +243,16 @@ Bucket.prototype.setAttribPointers = function(shaderName, gl, glShader, offset, 
  * @param shader The active WebGL shader
  */
 // TODO deprecate, establish all desired state in setAttribPointers
-Bucket.prototype.unsetAttribPointers = function(shaderName, gl, glShader) {
+Bucket.prototype.unsetAttribPointers = function(shaderName, gl, shader) {
+
     var attributes = this.shaderInterfaces[shaderName].attributes;
 
     // Set disabled attributes
     for (var i = 0; i < attributes.length; i++) {
         var attribute = attributes[i];
-        var glAttribute = glShader['a_' + attribute.name];
+        var attributeId = shader['a_' + attribute.name];
         if (attribute.isDisabled && attribute.isDisabled.call(this)) {
-            gl.enableVertexAttribArray(glAttribute);
+            gl.enableVertexAttribArray(attributeId);
         }
     }
 };
@@ -301,6 +303,7 @@ Bucket.prototype.createStyleLayer = function(layer) {
     }
 };
 
+// TODO use lazy evaluation to get rid of this call
 Bucket.prototype.createFilter = function() {
     if (!this.filter) {
         this.filter = featureFilter(this.layer.filter);

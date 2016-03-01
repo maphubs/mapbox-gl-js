@@ -105,7 +105,7 @@ function drawFill(painter, source, layer, coord) {
     for (var i = 0; i < elementGroups.length; i++) {
         var group = elementGroups[i];
         var offset = group.vertexStartIndex * vertex.itemSize;
-        vertex.setAttribPointers(gl, painter.fillShader, offset);
+        bucket.setAttribPointers('fill', gl, painter.fillShader, offset);
 
         var count = group.elementLength * 3;
         var elementOffset = group.elementStartIndex * elements.itemSize;
@@ -213,7 +213,7 @@ function drawStroke(painter, source, layer, coord) {
     for (var k = 0; k < elementGroups.length; k++) {
         var group = elementGroups[k];
         var offset = group.vertexStartIndex * vertex.itemSize;
-        vertex.setAttribPointers(gl, painter.outlineShader, offset);
+        bucket.setAttribPointers('fill', gl, painter.outlineShader, offset);
 
         var count = group.secondElementLength * 2;
         var elementOffset = group.secondElementStartIndex * elements.itemSize;

@@ -233,7 +233,11 @@ Bucket.prototype.setAttribPointers = function(shaderName, gl, shader, offset, ar
     }
 
     // Set enabled attributes
-    this.buffers[this.getBufferName(shaderName, 'vertex')].setAttribPointers(gl, shader, offset);
+    var enabledAttributes = this.attributes[shaderName].enabled;
+    var vertexBuffer = this.buffers[this.getBufferName(shaderName, 'vertex')];
+    vertexBuffer.setAttribPointers(gl, shader, offset, util.mapObjectKV(enabledAttributes, function(attribute) {
+        return [attribute.name, 'a_' + attribute.name];
+    }));
 };
 
 /**

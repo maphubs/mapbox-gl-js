@@ -430,6 +430,15 @@ exports.mapObject = function(input, iterator, context) {
     return output;
 };
 
+exports.mapObjectKV = function(input, iterator, context) {
+    var output = {};
+    for (var key in input) {
+        var tuple = iterator.call(context || this, input[key], key, input);
+        output[tuple[0]] = tuple[1];
+    }
+    return output;
+};
+
 /**
  * Create an object by filtering out values of an existing object
  * @param {Object} input

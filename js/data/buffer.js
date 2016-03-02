@@ -71,6 +71,13 @@ function Buffer(options) {
         // the worker thread, we can skip in the "clone an existing buffer" case.
         this._createPushMethod();
         this._refreshViews();
+
+    }
+
+    this.attributeLookup = {};
+    for (var i = 0; i < this.attributes.length; i++) {
+        var attribute = this.attributes[i];
+        this.attributeLookup[attribute.name] = attribute;
     }
 }
 
@@ -123,13 +130,19 @@ Buffer.prototype.destroy = function(gl) {
  * @param shader The active WebGL shader
  * @param {number} offset The offset of the attribute data in the currently bound GL buffer.
  */
-Buffer.prototype.setAttribPointers = function(gl, shader, offset) {
-    for (var i = 0; i < this.attributes.length; i++) {
-        var attrib = this.attributes[i];
+Buffer.prototype.setAttribPointers = function(gl, shader, offset, attributes) {
+    for (var bufferAttributeName in attributes) {
+        var shaderAttributeName = attributes[bufferAttributeName];
+        var attribute = this.attributeLookup[bufferAttributeName];
 
         gl.vertexAttribPointer(
-            shader['a_' + attrib.name], attrib.components, gl[attrib.type.name],
-            false, this.itemSize, offset + attrib.offset);
+            shader[shaderAttributeName],
+            attribute.components,
+            gl[attribute.type.name],
+            false,
+            this.itemSize,
+            offset + attribute.offset
+        );
     }
 };
 

@@ -145,11 +145,14 @@ Bucket.prototype.makeRoomFor = function(shaderName, numVertices) {
         var elementBuffer = this.buffers[this.getBufferName(shaderName, 'element')];
         var secondElementBuffer = this.buffers[this.getBufferName(shaderName, 'secondElement')];
 
-        currentGroup = new ElementGroup(
-            vertexBuffer.length,
-            elementBuffer && elementBuffer.length,
-            secondElementBuffer && secondElementBuffer.length
-        );
+        currentGroup = {
+            vertexStartIndex: vertexBuffer.length,
+            elementStartIndex: elementBuffer && elementBuffer.length,
+            secondElementStartIndex: secondElementBuffer && secondElementBuffer.length,
+            elementLength: 0,
+            vertexLength: 0,
+            secondElementLength: 0
+        };
         groups.push(currentGroup);
     }
 
@@ -403,14 +406,4 @@ function createElementBuffer(components) {
 
 function capitalize(string) {
     return string.charAt(0).toUpperCase() + string.slice(1);
-}
-
-function ElementGroup(vertexStartIndex, elementStartIndex, secondElementStartIndex) {
-    // the offset into the vertex buffer of the first vertex in this group
-    this.vertexStartIndex = vertexStartIndex;
-    this.elementStartIndex = elementStartIndex;
-    this.secondElementStartIndex = secondElementStartIndex;
-    this.elementLength = 0;
-    this.vertexLength = 0;
-    this.secondElementLength = 0;
 }

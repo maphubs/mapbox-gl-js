@@ -204,13 +204,13 @@ WorkerTile.prototype.parse = function(data, layers, actor, callback, rawTileData
         }
 
         var featureTree = tile.featureTree.serialize();
-        featureTree.data.rawTileData = rawTileData;
 
         callback(null, {
             elementGroups: getElementGroups(buckets),
             buffers: buffers,
             bucketStats: stats,
-            featureTree: featureTree.data
+            featureTree: featureTree.data,
+            rawTileData: rawTileData
         }, getTransferables(buffers).concat(featureTree.transferables.concat(rawTileData)));
     }
 };

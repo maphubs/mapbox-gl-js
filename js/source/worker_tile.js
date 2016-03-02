@@ -21,7 +21,7 @@ function WorkerTile(params) {
     this.collisionDebug = params.collisionDebug;
 }
 
-WorkerTile.prototype.parse = function(data, layers, actor, callback) {
+WorkerTile.prototype.parse = function(data, layers, actor, callback, rawTileData) {
 
     this.status = 'parsing';
     this.data = data;
@@ -203,11 +203,15 @@ WorkerTile.prototype.parse = function(data, layers, actor, callback) {
             tile.redoPlacementAfterDone = false;
         }
 
+        var featureTree = tile.featureTree.serialize();
+        featureTree.data.rawTileData = rawTileData;
+
         callback(null, {
             elementGroups: getElementGroups(buckets),
             buffers: buffers,
-            bucketStats: stats
-        }, getTransferables(buffers));
+            bucketStats: stats,
+            featureTree: featureTree.data
+        }, getTransferables(buffers).concat(featureTree.transferables.concat(rawTileData)));
     }
 };
 

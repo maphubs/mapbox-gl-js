@@ -3,6 +3,7 @@
 var util = require('../util/util');
 var Buffer = require('../data/buffer');
 var EXTENT = require('../data/buffer').EXTENT;
+var FeatureTree = require('../data/feature_tree');
 
 module.exports = Tile;
 
@@ -73,6 +74,7 @@ Tile.prototype = {
         // empty GeoJSON tile
         if (!data) return;
 
+        this.featureTree = new FeatureTree(data.featureTree);
         this.buffers = unserializeBuffers(data.buffers);
         this.elementGroups = data.elementGroups;
     },

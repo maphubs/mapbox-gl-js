@@ -75,21 +75,21 @@ exports._queryRenderedVectorFeatures = function(queryGeometry, params, classes, 
     if (!results)
         return callback(null, []);
 
-    util.asyncAll(results, function queryTile(result, cb) {
-        this.dispatcher.send('query rendered features', {
-            uid: result.tile.uid,
-            source: this.id,
+    var styleLayers = this.map.style._layers;
+
+    var features = [];
+    results.forEach(function(result) {
+        if (!result.tile.loaded || !result.tile.featureTree) return [];
+        result.tile.featureTree.query(features, {
             queryGeometry: result.queryGeometry,
             scale: result.scale,
             tileSize: result.tile.tileSize,
-            classes: classes,
-            zoom: zoom,
             bearing: bearing,
             params: params
-        }, cb, result.tile.workerID);
-    }.bind(this), function done(err, features) {
-        callback(err, Array.prototype.concat.apply([], features));
+        }, styleLayers);
     });
+
+    callback(null, features);
 };
 
 exports._querySourceFeatures = function(params, callback) {

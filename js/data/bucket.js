@@ -251,6 +251,25 @@ Bucket.prototype.setAttribPointers = function(shaderName, gl, shader, offset, ar
     );
 };
 
+Bucket.prototype.bindBuffers = function(shaderInterfaceName, gl, options) {
+    var shaderInterface = this.shaderInterfaces[shaderInterfaceName];
+
+    if (shaderInterface.vertexBuffer) {
+        var vertexBuffer = this.buffers[this.getBufferName(shaderInterfaceName, 'vertex')];
+        vertexBuffer.bind(gl);
+    }
+
+    if (shaderInterface.elementBuffer && (!options || !options.secondElement)) {
+        var elementBuffer = this.buffers[this.getBufferName(shaderInterfaceName, 'element')];
+        elementBuffer.bind(gl);
+    }
+
+    if (shaderInterface.secondElementBuffer && (options && options.secondElement)) {
+        var secondElementBuffer = this.buffers[this.getBufferName(shaderInterfaceName, 'secondElement')];
+        secondElementBuffer.bind(gl);
+    }
+};
+
 /**
  * Restore the state of the attribute pointers in a WebGL context
  * @private

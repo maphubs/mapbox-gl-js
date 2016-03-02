@@ -41,9 +41,6 @@ function drawCircles(painter, source, layer, coords) {
         var elementGroups = bucket.elementGroups.circle;
         if (!elementGroups) continue;
 
-        var vertex = bucket.buffers.circleVertex;
-        var elements = bucket.buffers.circleElement;
-
         gl.setPosMatrix(painter.translatePosMatrix(
             painter.calculatePosMatrix(coord, source.maxzoom),
             tile,
@@ -52,12 +49,10 @@ function drawCircles(painter, source, layer, coords) {
         ));
         gl.setExMatrix(painter.transform.exMatrix);
 
+        bucket.bindBuffers('circle', gl);
         for (var k = 0; k < elementGroups.length; k++) {
             var group = elementGroups[k];
             var count = group.elementLength * 3;
-
-            vertex.bind(gl);
-            elements.bind(gl);
 
             bucket.setAttribPointers('circle', gl, shader, group.vertexOffset, [{$zoom: painter.transform.zoom}]);
             gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_SHORT, group.elementOffset);

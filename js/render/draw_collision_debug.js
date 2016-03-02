@@ -19,8 +19,7 @@ function drawCollisionDebug(painter, source, layer, coords) {
         if (!bucket.buffers) continue;
         if (elementGroups[0].vertexLength === 0) continue;
 
-        var buffer = bucket.buffers.collisionBoxVertex;
-        buffer.bind(gl);
+        bucket.bindBuffers('collisionBox', gl);
         bucket.setAttribPointers('collisionBox', gl, shader, elementGroups[0].vertexOffset);
 
         var posMatrix = painter.calculatePosMatrix(coord, source.maxzoom);

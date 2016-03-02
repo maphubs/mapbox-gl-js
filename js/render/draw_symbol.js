@@ -100,7 +100,7 @@ function drawSymbol(painter, layer, posMatrix, tile, bucket, elementGroups, pref
     var extra = (topedgelength + x) / topedgelength - 1;
 
     var text = prefix === 'text';
-    var shader, vertex, elements, texsize;
+    var shader, texsize;
 
     if (!text && !painter.style.sprite.loaded())
         return;
@@ -121,16 +121,12 @@ function drawSymbol(painter, layer, posMatrix, tile, bucket, elementGroups, pref
         if (!glyphAtlas) return;
 
         glyphAtlas.updateTexture(gl);
-        vertex = bucket.buffers.glyphVertex;
-        elements = bucket.buffers.glyphElement;
         texsize = [glyphAtlas.width / 4, glyphAtlas.height / 4];
     } else {
         var mapMoving = painter.options.rotating || painter.options.zooming;
         var iconScaled = fontScale !== 1 || browser.devicePixelRatio !== painter.spriteAtlas.pixelRatio || iconsNeedLinear;
         var iconTransformed = alignedWithMap || painter.transform.pitch;
         painter.spriteAtlas.bind(gl, sdf || mapMoving || iconScaled || iconTransformed);
-        vertex = bucket.buffers.iconVertex;
-        elements = bucket.buffers.iconElement;
         texsize = [painter.spriteAtlas.width / 4, painter.spriteAtlas.height / 4];
     }
 
@@ -154,7 +150,7 @@ function drawSymbol(painter, layer, posMatrix, tile, bucket, elementGroups, pref
 
     var group, count;
 
-    elements.bind(gl);
+    bucket.bindBuffers(shaderInterfaceName, gl);
 
     if (sdf) {
         var sdfPx = 8;
@@ -172,7 +168,6 @@ function drawSymbol(painter, layer, posMatrix, tile, bucket, elementGroups, pref
 
             for (var j = 0; j < elementGroups.length; j++) {
                 group = elementGroups[j];
-                vertex.bind(gl);
                 bucket.setAttribPointers(shaderInterfaceName, gl, shader, group.vertexOffset);
 
                 count = group.elementLength * 3;
@@ -187,7 +182,6 @@ function drawSymbol(painter, layer, posMatrix, tile, bucket, elementGroups, pref
 
         for (var i = 0; i < elementGroups.length; i++) {
             group = elementGroups[i];
-            vertex.bind(gl);
             bucket.setAttribPointers(shaderInterfaceName, gl, shader, group.vertexOffset);
 
             count = group.elementLength * 3;
@@ -198,7 +192,6 @@ function drawSymbol(painter, layer, posMatrix, tile, bucket, elementGroups, pref
         gl.uniform1f(shader.u_opacity, layer.paint['icon-opacity']);
         for (var k = 0; k < elementGroups.length; k++) {
             group = elementGroups[k];
-            vertex.bind(gl);
             bucket.setAttribPointers(shaderInterfaceName, gl, shader, group.vertexOffset);
 
             count = group.elementLength * 3;

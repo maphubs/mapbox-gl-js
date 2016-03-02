@@ -71,25 +71,28 @@ exports._queryRenderedVectorFeatures = function(queryGeometry, params, classes, 
     if (!this._pyramid)
         return callback(null, []);
 
-    var results = this._pyramid.tilesIn(queryGeometry);
-    if (!results)
+    var tilesIn = this._pyramid.tilesIn(queryGeometry);
+    if (!tilesIn)
         return callback(null, []);
 
     var styleLayers = this.map.style._layers;
-
     var features = [];
-    results.forEach(function(result) {
-        if (!result.tile.loaded || !result.tile.featureTree) return [];
-        result.tile.featureTree.query(features, {
-            queryGeometry: result.queryGeometry,
-            scale: result.scale,
-            tileSize: result.tile.tileSize,
+
+    for (var r = 0; r < tilesIn.length; r++) {
+        var tileIn = tilesIn[r];
+        if (!tileIn.tile.loaded || !tileIn.tile.featureTree) continue;
+        tileIn.tile.featureTree.query(features, {
+            queryGeometry: tileIn.queryGeometry,
+            scale: tileIn.scale,
+            tileSize: tileIn.tile.tileSize,
             bearing: bearing,
             params: params
         }, styleLayers);
-    });
+    }
 
-    callback(null, features);
+    setTimeout(function() {
+        callback(null, features);
+    }, 0);
 };
 
 exports._querySourceFeatures = function(params, callback) {

@@ -151,7 +151,10 @@ Bucket.prototype.makeRoomFor = function(shaderName, numVertices) {
             secondElementStartIndex: secondElementBuffer && secondElementBuffer.length,
             elementLength: 0,
             vertexLength: 0,
-            secondElementLength: 0
+            secondElementLength: 0,
+            elementOffset: elementBuffer && elementBuffer.length * elementBuffer.itemSize,
+            secondElementOffset: secondElementBuffer && secondElementBuffer.length * secondElementBuffer.itemSize,
+            vertexOffset: vertexBuffer && vertexBuffer.length * vertexBuffer.itemSize
         };
         groups.push(currentGroup);
     }
@@ -238,9 +241,14 @@ Bucket.prototype.setAttribPointers = function(shaderName, gl, shader, offset, ar
     // Set enabled attributes
     var enabledAttributes = this.attributes[shaderName].enabled;
     var vertexBuffer = this.buffers[this.getBufferName(shaderName, 'vertex')];
-    vertexBuffer.setAttribPointers(gl, shader, offset, util.mapObjectKV(enabledAttributes, function(attribute) {
-        return [attribute.name, 'a_' + attribute.name];
-    }));
+    vertexBuffer.setAttribPointers(
+        gl,
+        shader,
+        offset,
+        util.mapObjectKV(enabledAttributes, function(attribute) {
+            return [attribute.name, 'a_' + attribute.name];
+        })
+    );
 };
 
 /**

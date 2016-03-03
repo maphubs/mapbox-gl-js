@@ -79,21 +79,7 @@ function Bucket(options) {
 
     // TODO make this call more efficient or unnecessary
     this.createStyleLayers();
-    this.attributes = {};
-    for (var interfaceName in this.shaderInterfaces) {
-        var interfaceAttributes = this.attributes[interfaceName] = { enabled: [], disabled: [] };
-        var interface_ = this.shaderInterfaces[interfaceName];
-        for (var i = 0; i < interface_.attributes.length; i++) {
-            var attribute = interface_.attributes[i];
-            if (isAttributeDisabled(this, attribute)) {
-                interfaceAttributes.disabled.push(util.extend({
-                    getValue: createGetAttributeValueMethod(this, interfaceName, attribute)
-                }, attribute));
-            } else {
-                interfaceAttributes.enabled.push(attribute);
-            }
-        }
-    }
+    this.attributes = createAttributes(this);
 
     if (options.elementGroups) {
         this.elementGroups = options.elementGroups;
@@ -245,7 +231,7 @@ Bucket.prototype.setAttribPointers = function(shaderName, gl, shader, offset, ar
         shader,
         offset,
         util.mapObjectKV(enabledAttributes, function(attribute) {
-            return [attribute.name, 'a_' + attribute.name];
+            return [attribute.name, attribute.shaderName];
         })
     );
 };
@@ -444,4 +430,31 @@ function createElementBuffer(components) {
 
 function capitalize(string) {
     return string.charAt(0).toUpperCase() + string.slice(1);
+}
+
+function createAttributes(bucket) {
+    var attributes = {};
+    for (var interfaceName in bucket.shaderInterfaces) {
+        var interfaceAttributes = attributes[interfaceName] = { enabled: [], disabled: [] };
+        var interface_ = bucket.shaderInterfaces[interfaceName];
+        for (var i = 0; i < interface_.attributes.length; i++) {
+            var attribute = interface_.attributes[i];
+            for (var j = 0; j < bucket.childLayers.length; j++) {
+                var layer = bucket.childLayers[j];
+                if (isAttributeDisabled(bucket, attribute)) {
+                    interfaceAttributes.disabled.push(util.extend({
+                        getValue: createGetAttributeValueMethod(bucket, interfaceName, attribute),
+                        name: layer.id + '__' + attribute.name,
+                        shaderName: 'a_' + attribute.name
+                    }, attribute));
+                } else {
+                    interfaceAttributes.enabled.push(util.extend({
+                        name: layer.id + '__' + attribute.name,
+                        shaderName: 'a_' + attribute.name
+                    }, attribute));
+                }
+            }
+        }
+    }
+    return attributes;
 }

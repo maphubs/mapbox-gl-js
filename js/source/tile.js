@@ -8,6 +8,8 @@ var vt = require('vector-tile');
 var Protobuf = require('pbf');
 var GeoJSONFeature = require('../util/vectortile_to_geojson');
 var featureFilter = require('feature-filter');
+var CollisionTile = require('../symbol/collision_tile');
+var CollisionBoxArray = require('../symbol/collision_box');
 
 module.exports = Tile;
 
@@ -78,7 +80,9 @@ Tile.prototype = {
         // empty GeoJSON tile
         if (!data) return;
 
-        this.featureTree = new FeatureTree(data.featureTree, data.rawTileData);
+        this.collisionBoxArray = new CollisionBoxArray(data.collisionBoxArray);
+        this.collisionTile = new CollisionTile(data.collisionTile, this.collisionBoxArray);
+        this.featureTree = new FeatureTree(data.featureTree, data.rawTileData, this.collisionTile);
         this.rawTileData = data.rawTileData;
         this.buffers = unserializeBuffers(data.buffers);
         this.elementGroups = data.elementGroups;
@@ -93,6 +97,9 @@ Tile.prototype = {
      * @private
      */
     reloadSymbolData: function(data, painter) {
+
+        this.collisionTile = new CollisionTile(data.collisionTile, this.collisionBoxArray);
+        this.featureTree.setCollisionTile(this.collisionTile);
 
         if (!this.buffers) {
             // the tile has been destroyed

@@ -51,6 +51,15 @@ map.on('load', function() {
         }
     });
 
+    map.addLayer({
+        "id": "random-points-outline",
+        "ref": "random-points",
+        "paint": {
+            "circle-radius": 10,
+            "circle-color": '#fff'
+        }
+    }, 'random-points');
+
     var bufferTimes = {};
     map.on('tile.stats', function(bufferTimes) {
         var _stats = [];

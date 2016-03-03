@@ -114,7 +114,6 @@ SymbolBucket.prototype.shaderInterfaces = {
 };
 
 SymbolBucket.prototype.populateBuffers = function(collisionTile, stacks, icons) {
-    this.createStyleLayer();
     this.createBuffers();
 
     // To reduce the number of labels that jump around when zooming we need
@@ -432,7 +431,6 @@ SymbolBucket.prototype.placeFeatures = function(collisionTile, collisionDebug) {
 };
 
 SymbolBucket.prototype.addSymbols = function(shaderName, quads, scale, keepUpright, alongLine, placementAngle) {
-
     var group = this.makeRoomFor(shaderName, 4 * quads.length);
 
     // TODO manual curry
@@ -480,8 +478,6 @@ SymbolBucket.prototype.addSymbols = function(shaderName, quads, scale, keepUprig
 };
 
 SymbolBucket.prototype.updateIcons = function(icons) {
-    this.createStyleLayer();
-
     var iconValue = this.layer.layout['icon-image'];
     if (!iconValue) return;
 
@@ -493,8 +489,6 @@ SymbolBucket.prototype.updateIcons = function(icons) {
 };
 
 SymbolBucket.prototype.updateFont = function(stacks) {
-    this.createStyleLayer();
-
     var fontName = this.layer.layout['text-font'],
         stack = stacks[fontName] = stacks[fontName] || {};
 

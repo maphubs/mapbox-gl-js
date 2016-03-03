@@ -34,6 +34,14 @@ WorkerTile.prototype.parse = function(data, layers, actor, callback) {
     var sourceLayerId;
     var bucket;
 
+    var childLayers = {};
+    for (i = 0; i < layers.length; i++) {
+        layer = layers[i];
+        var key = layer.ref || layer.id;
+        childLayers[key] = childLayers[key] || [];
+        childLayers[key].push(layer);
+    }
+
     // Map non-ref layers to buckets.
     for (i = 0; i < layers.length; i++) {
         layer = layers[i];
@@ -46,6 +54,7 @@ WorkerTile.prototype.parse = function(data, layers, actor, callback) {
 
         bucket = Bucket.create({
             layer: layer,
+            childLayers: childLayers[layer.id],
             zoom: this.zoom,
             overscaling: this.overscaling,
             collisionDebug: this.collisionDebug
@@ -58,14 +67,6 @@ WorkerTile.prototype.parse = function(data, layers, actor, callback) {
             sourceLayerId = layer['source-layer'];
             bucketsBySourceLayer[sourceLayerId] = bucketsBySourceLayer[sourceLayerId] || {};
             bucketsBySourceLayer[sourceLayerId][layer.id] = bucket;
-        }
-    }
-
-    // Index ref layers.
-    for (i = 0; i < layers.length; i++) {
-        layer = layers[i];
-        if (layer.source === this.source && layer.ref && bucketsById[layer.ref]) {
-            bucketsById[layer.ref].layers.push(layer.id);
         }
     }
 
@@ -170,7 +171,7 @@ WorkerTile.prototype.parse = function(data, layers, actor, callback) {
         if (bucket.interactive) {
             for (var i = 0; i < bucket.features.length; i++) {
                 var feature = bucket.features[i];
-                tile.featureTree.insert(feature.bbox(), bucket.layers, feature);
+                tile.featureTree.insert(feature.bbox(), bucket.childLayers.map(getLayerId), feature);
             }
         }
 
@@ -178,6 +179,10 @@ WorkerTile.prototype.parse = function(data, layers, actor, callback) {
 
         stats._total += time;
         stats[bucket.id] = (stats[bucket.id] || 0) + time;
+
+        function getLayerId(layer) {
+            return layer.id;
+        }
     }
 
     function done() {

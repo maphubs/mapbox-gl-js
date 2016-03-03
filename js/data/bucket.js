@@ -67,8 +67,8 @@ function Bucket(options) {
     this.zoom = options.zoom;
     this.overscaling = options.overscaling;
     this.layer = options.layer;
+    this.childLayers = options.childLayers;
 
-    this.layers = [this.layer.id];
     this.type = this.layer.type;
     this.features = [];
     this.id = this.layer.id;
@@ -77,8 +77,8 @@ function Bucket(options) {
     this.minZoom = this.layer.minzoom;
     this.maxZoom = this.layer.maxzoom;
 
-    // TODO make this call more efficient or unnescessary
-    this.createStyleLayers(options.style);
+    // TODO make this call more efficient or unnecessary
+    this.createStyleLayers();
     this.attributes = {};
     for (var interfaceName in this.shaderInterfaces) {
         var interfaceAttributes = this.attributes[interfaceName] = { enabled: [], disabled: [] };
@@ -118,7 +118,6 @@ function isAttributeDisabled(bucket, attribute) {
  * @private
  */
 Bucket.prototype.populateBuffers = function() {
-    this.createStyleLayer();
     this.createBuffers();
 
     for (var i = 0; i < this.features.length; i++) {
@@ -321,19 +320,31 @@ Bucket.prototype.serialize = function() {
         elementGroups: this.elementGroups,
         buffers: util.mapObject(this.buffers, function(buffer) {
             return buffer.serialize();
+        }),
+        childLayers: this.childLayers.map(function(layer) {
+            return { id: layer.id };
         })
     };
 };
 
 // TODO there will be race conditions when the layer passed here has changed
 // since it was used to construct the buffers
-Bucket.prototype.createStyleLayer = function(layer) {
-    if (layer) {
-        this.layer = layer;
-    } else if (!(this.layer instanceof StyleLayer)) {
-        this.layer = StyleLayer.create(this.layer);
-        this.layer.cascade({}, {transition: false});
-        this.layer.recalculate(this.zoom, { lastIntegerZoom: Infinity, lastIntegerZoomTime: 0, lastZoom: 0 });
+Bucket.prototype.createStyleLayers = function(style) {
+    var that = this;
+    var refLayer = this.layer = create(this.layer);
+    this.childLayers = this.childLayers.map(create);
+
+    function create(layer) {
+        if (style) {
+            return style.getLayer(layer.id);
+        } else if (!(layer instanceof StyleLayer)) {
+            layer = StyleLayer.create(layer, refLayer);
+            layer.cascade({}, {transition: false});
+            layer.recalculate(that.zoom, { lastIntegerZoom: Infinity, lastIntegerZoomTime: 0, lastZoom: 0 });
+            return layer;
+        } else {
+            return layer;
+        }
     }
 };
 

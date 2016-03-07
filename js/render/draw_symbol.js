@@ -168,7 +168,7 @@ function drawSymbol(painter, layer, posMatrix, tile, bucket, elementGroups, pref
 
             for (var j = 0; j < elementGroups.length; j++) {
                 group = elementGroups[j];
-                bucket.setAttribPointers(shaderInterfaceName, gl, shader, group.vertexOffset);
+                bucket.setAttribPointers(shaderInterfaceName, gl, shader, group.vertexOffset, layer);
 
                 count = group.elementLength * 3;
                 gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_SHORT, group.elementOffset);
@@ -182,7 +182,7 @@ function drawSymbol(painter, layer, posMatrix, tile, bucket, elementGroups, pref
 
         for (var i = 0; i < elementGroups.length; i++) {
             group = elementGroups[i];
-            bucket.setAttribPointers(shaderInterfaceName, gl, shader, group.vertexOffset);
+            bucket.setAttribPointers(shaderInterfaceName, gl, shader, group.vertexOffset, layer);
 
             count = group.elementLength * 3;
             gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_SHORT, group.elementOffset);
@@ -192,7 +192,7 @@ function drawSymbol(painter, layer, posMatrix, tile, bucket, elementGroups, pref
         gl.uniform1f(shader.u_opacity, layer.paint['icon-opacity']);
         for (var k = 0; k < elementGroups.length; k++) {
             group = elementGroups[k];
-            bucket.setAttribPointers(shaderInterfaceName, gl, shader, group.vertexOffset);
+            bucket.setAttribPointers(shaderInterfaceName, gl, shader, group.vertexOffset, layer);
 
             count = group.elementLength * 3;
             gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_SHORT, group.elementOffset);

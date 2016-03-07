@@ -56,7 +56,11 @@ map.on('load', function() {
         "ref": "random-points",
         "paint": {
             "circle-radius": 10,
-            "circle-color": '#fff'
+            "circle-color": {
+                range: ['white', 'black'],
+                domain: [0, 100],
+                property: 'mapbox'
+            }
         }
     }, 'random-points');
 

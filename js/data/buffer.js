@@ -134,9 +134,10 @@ Buffer.prototype.setAttribPointers = function(gl, shader, offset, attributes) {
     for (var bufferAttributeName in attributes) {
         var shaderAttributeName = attributes[bufferAttributeName];
         var attribute = this.attributeLookup[bufferAttributeName];
-
+        var attributeId = shader[shaderAttributeName];
+        gl.enableVertexAttribArray(attributeId);
         gl.vertexAttribPointer(
-            shader[shaderAttributeName],
+            attributeId,
             attribute.components,
             gl[attribute.type.name],
             false,

@@ -78,7 +78,7 @@ function Bucket(options) {
     this.maxZoom = this.layer.maxzoom;
 
     // TODO make this call more efficient or unnecessary
-    this.createStyleLayers();
+    this.createStyleLayers(options.style);
     this.attributes = createAttributes(this);
 
     if (options.elementGroups) {
@@ -86,16 +86,6 @@ function Bucket(options) {
         this.buffers = util.mapObject(options.buffers, function(options) {
             return new Buffer(options);
         });
-    }
-}
-
-function isAttributeDisabled(bucket, attribute) {
-    if (attribute.isDisabled === undefined || attribute.isDisabled === false) {
-        return false;
-    } else if (attribute.isDisabled === true) {
-        return true;
-    } else {
-        return !!attribute.isDisabled.call(bucket);
     }
 }
 
@@ -169,12 +159,7 @@ Bucket.prototype.createBuffers = function() {
                 attributes: enabledAttributes
             });
 
-            this[vertexAddMethodName] = this[vertexAddMethodName] || createVertexAddMethod(
-                shaderName,
-                shaderInterface,
-                this.getBufferName(shaderName, 'vertex'),
-                enabledAttributes
-            );
+            this[vertexAddMethodName] = this[vertexAddMethodName] || createVertexAddMethod(this, shaderName);
         }
 
         if (shaderInterface.elementBuffer) {
@@ -213,18 +198,20 @@ Bucket.prototype.trimBuffers = function() {
  * @param {number} offset The offset of the attribute data in the currently bound GL buffer.
  * @param {Array} arguments to be passed to disabled attribute value functions
  */
-Bucket.prototype.setAttribPointers = function(shaderName, gl, shader, offset, args) {
+Bucket.prototype.setAttribPointers = function(shaderName, gl, shader, offset, layer, args) {
     // Set disabled attributes
     var disabledAttributes = this.attributes[shaderName].disabled;
     for (var i = 0; i < disabledAttributes.length; i++) {
         var attribute = disabledAttributes[i];
-        var attributeId = shader['a_' + attribute.name];
+        var attributeId = shader[attribute.shaderName];
         gl.disableVertexAttribArray(attributeId);
         gl['vertexAttrib' + attribute.components + 'fv'](attributeId, attribute.getValue.apply(this, args));
     }
 
     // Set enabled attributes
-    var enabledAttributes = this.attributes[shaderName].enabled;
+    var enabledAttributes = this.attributes[shaderName].enabled.filter(function(attribute) {
+        return attribute.isLayerConstant !== false || attribute.layerId === layer.id;
+    });
     var vertexBuffer = this.buffers[this.getBufferName(shaderName, 'vertex')];
     vertexBuffer.setAttribPointers(
         gl,
@@ -256,27 +243,6 @@ Bucket.prototype.bindBuffers = function(shaderInterfaceName, gl, options) {
 };
 
 /**
- * Restore the state of the attribute pointers in a WebGL context
- * @private
- * @param gl The WebGL context
- * @param shader The active WebGL shader
- */
-// TODO deprecate, establish all desired state in setAttribPointers
-Bucket.prototype.unsetAttribPointers = function(shaderName, gl, shader) {
-
-    var attributes = this.shaderInterfaces[shaderName].attributes;
-
-    // Set disabled attributes
-    for (var i = 0; i < attributes.length; i++) {
-        var attribute = attributes[i];
-        var attributeId = shader['a_' + attribute.name];
-        if (attribute.isDisabled && attribute.isDisabled.call(this)) {
-            gl.enableVertexAttribArray(attributeId);
-        }
-    }
-};
-
-/**
  * Get the name of the method used to add an item to a buffer.
  * @param {string} shaderName The name of the shader that will use the buffer
  * @param {string} type One of "vertex", "element", or "secondElement"
@@ -298,17 +264,14 @@ Bucket.prototype.getBufferName = function(shaderName, type) {
 
 Bucket.prototype.serialize = function() {
     return {
-        layer: {
-            id: this.layer.id,
-            type: this.layer.type
-        },
+        layer: this.layer.serialize(),
         zoom: this.zoom,
         elementGroups: this.elementGroups,
         buffers: util.mapObject(this.buffers, function(buffer) {
             return buffer.serialize();
         }),
         childLayers: this.childLayers.map(function(layer) {
-            return { id: layer.id };
+            return layer.serialize();
         })
     };
 };
@@ -345,19 +308,25 @@ Bucket.prototype._premultiplyColor = util.premultiply;
 
 
 var createVertexAddMethodCache = {};
-function createVertexAddMethod(shaderName, shaderInterface, bufferName, enabledAttributes) {
-    var body = '';
+function createVertexAddMethod(bucket, interfaceName) {
+    var enabledAttributes = bucket.attributes[interfaceName].enabled;
+    var shaderInterface = bucket.shaderInterfaces[interfaceName];
+
+    var body = 'var layer;\n';
 
     var pushArgs = [];
+
     for (var i = 0; i < enabledAttributes.length; i++) {
         var attribute = enabledAttributes[i];
 
         var attributePushArgs = [];
         if (Array.isArray(attribute.value)) {
-            attributePushArgs = attribute.value;
+            attributePushArgs = attributePushArgs.concat(attribute.value);
+            attributePushArgs[0] = 'layer = this.childLayers[' + attribute.layerIndex + '] &&' + attributePushArgs[0];
         } else {
+            body += 'layer = this.childLayers[' + attribute.layerIndex + '];\n';
             var attributeId = '_' + i;
-            body += 'var ' + attributeId + ' = ' + attribute.value + ';';
+            body += 'var ' + attributeId + ' = ' + attribute.value + ';\n';
             for (var j = 0; j < attribute.components; j++) {
                 attributePushArgs.push(attributeId + '[' + j + ']');
             }
@@ -376,6 +345,7 @@ function createVertexAddMethod(shaderName, shaderInterface, bufferName, enabledA
         pushArgs = pushArgs.concat(multipliedAttributePushArgs);
     }
 
+    var bufferName = bucket.getBufferName(interfaceName, 'vertex');
     body += 'return this.buffers.' + bufferName + '.push(' + pushArgs.join(',') + ');';
 
     if (!createVertexAddMethodCache[body]) {
@@ -392,24 +362,27 @@ function createElementAddMethod(buffer) {
 }
 
 var _getAttributeValueCache = {};
-function createGetAttributeValueMethod(bucket, interfaceName, attribute) {
+function createGetAttributeValueMethod(bucket, interfaceName, attribute, layerIndex) {
     if (!_getAttributeValueCache[interfaceName]) {
         _getAttributeValueCache[interfaceName] = {};
     }
 
     if (!_getAttributeValueCache[interfaceName][attribute.name]) {
         var bodyArgs = bucket.shaderInterfaces[interfaceName].attributeArgs;
-        var body = 'return ';
+        var body = '';
+
+        body += 'var layer = this.childLayers[' + layerIndex + '];\n';
 
         if (Array.isArray(attribute.value)) {
-            body += '[' + attribute.value.join(', ') + ']';
+            body += 'return [' + attribute.value.join(', ') + ']';
         } else {
-            body += attribute.value;
+            body += 'return ' + attribute.value;
         }
 
         if (attribute.multiplier) {
             body += '.map(function(v) { return v * ' + attribute.multiplier + '; })';
         }
+        body += ';';
 
         _getAttributeValueCache[interfaceName][attribute.name] = new Function(bodyArgs, body);
     }
@@ -441,20 +414,36 @@ function createAttributes(bucket) {
             var attribute = interface_.attributes[i];
             for (var j = 0; j < bucket.childLayers.length; j++) {
                 var layer = bucket.childLayers[j];
-                if (isAttributeDisabled(bucket, attribute)) {
-                    interfaceAttributes.disabled.push(util.extend({
-                        getValue: createGetAttributeValueMethod(bucket, interfaceName, attribute),
+                if (attribute.isLayerConstant !== false && layer.id !== bucket.layer.id) continue;
+                if (isAttributeDisabled(bucket, attribute, layer)) {
+                    interfaceAttributes.disabled.push(util.extend({}, attribute, {
+                        getValue: createGetAttributeValueMethod(bucket, interfaceName, attribute, j),
                         name: layer.id + '__' + attribute.name,
-                        shaderName: 'a_' + attribute.name
-                    }, attribute));
+                        shaderName: 'a_' + attribute.name,
+                        layerId: layer.id,
+                        layerIndex: j
+                    }));
                 } else {
-                    interfaceAttributes.enabled.push(util.extend({
+                    interfaceAttributes.enabled.push(util.extend({}, attribute, {
                         name: layer.id + '__' + attribute.name,
-                        shaderName: 'a_' + attribute.name
-                    }, attribute));
+                        shaderName: 'a_' + attribute.name,
+                        layerId: layer.id,
+                        layerIndex: j
+                    }));
                 }
             }
         }
     }
     return attributes;
+}
+
+
+function isAttributeDisabled(bucket, attribute, layer) {
+    if (attribute.isDisabled === undefined || attribute.isDisabled === false) {
+        return false;
+    } else if (attribute.isDisabled === true) {
+        return true;
+    } else {
+        return !!attribute.isDisabled.call(bucket, layer);
+    }
 }

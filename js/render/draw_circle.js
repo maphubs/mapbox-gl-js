@@ -59,6 +59,7 @@ function drawCircles(painter, source, layer, coords) {
         }
     }
 
+    gl.enableVertexAttribArray(shader.a_color);
     gl.enableVertexAttribArray(shader.a_blur);
     gl.enableVertexAttribArray(shader.a_size);
 }

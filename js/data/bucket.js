@@ -81,6 +81,22 @@ function Bucket(options) {
     this.createStyleLayers(options.style);
     this.attributes = createAttributes(this);
 
+    this.setAttribPointersAttributes = {};
+    for (var shaderName in this.shaderInterfaces) {
+        this.setAttribPointersAttributes[shaderName] = {};
+        for (var i = 0; i < this.childLayers.length; i++) {
+            var layer = this.childLayers[i];
+            this.setAttribPointersAttributes[shaderName][layer.id] = {};
+            for (var j = 0; j < this.attributes[shaderName].enabled.length; j++) {
+                var attribute = this.attributes[shaderName].enabled[j];
+                if (attribute.isLayerConstant !== false || attribute.layerId === layer.id) {
+                    this.setAttribPointersAttributes[shaderName][layer.id][attribute.name] = attribute.shaderName;
+                }
+            }
+        }
+    }
+
+
     if (options.elementGroups) {
         this.elementGroups = options.elementGroups;
         this.buffers = util.mapObject(options.buffers, function(options) {
@@ -209,18 +225,8 @@ Bucket.prototype.setAttribPointers = function(shaderName, gl, shader, offset, la
     }
 
     // Set enabled attributes
-    var enabledAttributes = this.attributes[shaderName].enabled.filter(function(attribute) {
-        return attribute.isLayerConstant !== false || attribute.layerId === layer.id;
-    });
     var vertexBuffer = this.buffers[this.getBufferName(shaderName, 'vertex')];
-    vertexBuffer.setAttribPointers(
-        gl,
-        shader,
-        offset,
-        util.mapObjectKV(enabledAttributes, function(attribute) {
-            return [attribute.name, attribute.shaderName];
-        })
-    );
+    vertexBuffer.setAttribPointers(gl, shader, offset, this.setAttribPointersAttributes[shaderName][layer.id]);
 };
 
 Bucket.prototype.bindBuffers = function(shaderInterfaceName, gl, options) {

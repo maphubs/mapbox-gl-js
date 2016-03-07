@@ -61,6 +61,7 @@ function RunBenchmark(urls, duration, setup, teardown, done) {
         var script = document.createElement('script');
         script.src = url;
         document.body.appendChild(script);
+        state.url = url;
         script.onload = setupBenchmark;
 
     } else if (versionNum) {

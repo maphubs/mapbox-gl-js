@@ -22,7 +22,7 @@ function setup(state, callback) {
         container: 'map',
         zoom: 15,
         center: [-77.032194, 38.912753],
-        style: 'mapbox://styles/mapbox/bright-v8',
+        style: state.url === '/dist/mapbox-gl.js' ? '../../debug/streets-v9.json' : 'mapbox://styles/mapbox/streets-v8',
         hash: true
     });
 

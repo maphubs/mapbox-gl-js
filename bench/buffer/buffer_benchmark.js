@@ -174,7 +174,7 @@ module.exports = function run(accessToken) {
 
     var evented = util.extend({}, Evented);
 
-    var stylesheetURL = 'https://api.mapbox.com/styles/v1/mapbox/streets-v8?access_token=' + accessToken;
+    var stylesheetURL = '../../debug/streets-v9.json';
     ajax.getJSON(stylesheetURL, function(err, stylesheet) {
         if (err) return evented.fire('error', {error: err});
 

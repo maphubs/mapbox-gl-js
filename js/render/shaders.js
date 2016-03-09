@@ -41,6 +41,10 @@ module.exports = {
         fragment: fs.readFileSync(path.join(__dirname, '../../shaders/raster.fragment.glsl'), 'utf8'),
         vertex: fs.readFileSync(path.join(__dirname, '../../shaders/raster.vertex.glsl'), 'utf8')
     },
+    arcgisraster: {
+        fragment: fs.readFileSync(path.join(__dirname, '../../shaders/raster.fragment.glsl'), 'utf8'),
+        vertex: fs.readFileSync(path.join(__dirname, '../../shaders/raster.vertex.glsl'), 'utf8')
+    },
     icon: {
         fragment: fs.readFileSync(path.join(__dirname, '../../shaders/icon.fragment.glsl'), 'utf8'),
         vertex: fs.readFileSync(path.join(__dirname, '../../shaders/icon.vertex.glsl'), 'utf8')

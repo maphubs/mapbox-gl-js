@@ -132,6 +132,7 @@ exports.create = function(source) {
     var sources = {
         vector: require('./vector_tile_source'),
         raster: require('./raster_tile_source'),
+        arcgisraster: require('./arcgis_raster_tile_source'),
         geojson: require('./geojson_source'),
         video: require('./video_source'),
         image: require('./image_source')
@@ -145,6 +146,7 @@ exports.is = function(source) {
     var sources = {
         vector: require('./vector_tile_source'),
         raster: require('./raster_tile_source'),
+        arcgisraster: require('./arcgis_raster_tile_source'),
         geojson: require('./geojson_source'),
         video: require('./video_source'),
         image: require('./image_source')

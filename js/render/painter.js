@@ -239,6 +239,7 @@ var draw = {
     line: require('./draw_line'),
     fill: require('./draw_fill'),
     raster: require('./draw_raster'),
+    arcgisraster: require('./draw_raster'),
     background: require('./draw_background'),
     debug: require('./draw_debug')
 };

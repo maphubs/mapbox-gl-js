@@ -292,6 +292,94 @@ test('Map', function(t) {
         }
     });
 
+    t.test('#setMaxBounds', function (t) {
+        t.test('constrains map bounds', function (t) {
+            var map = createMap({zoom:0});
+            map.setMaxBounds([[-130.4297, 50.0642], [-61.52344, 24.20688]]);
+            t.deepEqual(toFixed(map.getBounds().toArray()), toFixed([
+                [-112.5000192114, 24.2068800000],
+                [-79.4531207886, 50.0642000000]]));
+            t.end();
+        });
+
+        t.test('when no argument is passed, map bounds constraints are removed', function (t) {
+            var map = createMap({zoom:0});
+            map.setMaxBounds([[-130.4297, 50.0642], [-61.52344, 24.20688]]);
+            t.deepEqual(toFixed(map.setMaxBounds(null).setZoom(0).getBounds().toArray()), toFixed([
+                [-166.28906999999964, -27.683527055417144],
+                [-25.664070000000066, 73.8248206696509]]));
+            t.end();
+        });
+
+        t.test('should not zoom out farther than bounds', function (t) {
+            var map = createMap();
+            map.setMaxBounds([[-130.4297, 50.0642], [-61.52344, 24.20688]]);
+            t.notEqual(map.setZoom(0).getZoom(), 0);
+            t.end();
+        });
+        t.end();
+
+        function toFixed(bounds) {
+            var n = 10;
+            return [
+                [bounds[0][0].toFixed(n), bounds[0][1].toFixed(n)],
+                [bounds[1][0].toFixed(n), bounds[1][1].toFixed(n)]
+            ];
+        }
+    });
+
+    t.test('#setMinZoom', function(t) {
+        var map = createMap({zoom:5});
+        map.setMinZoom(3.5);
+        map.setZoom(1);
+        t.equal(map.getZoom(), 3.5);
+        t.end();
+    });
+
+    t.test('unset minZoom', function(t) {
+        var map = createMap({minZoom:5});
+        map.setMinZoom(null);
+        map.setZoom(1);
+        t.equal(map.getZoom(), 1);
+        t.end();
+    });
+
+    t.test('ignore minZooms over maxZoom', function(t) {
+        var map = createMap({zoom:2, maxZoom:5});
+        t.throws(function() {
+            map.setMinZoom(6);
+        });
+        map.setZoom(0);
+        t.equal(map.getZoom(), 0);
+        t.end();
+    });
+
+    t.test('#setMaxZoom', function (t) {
+        var map = createMap({zoom:0});
+        map.setMaxZoom(3.5);
+        map.setZoom(4);
+        t.equal(map.getZoom(), 3.5);
+        t.end();
+    });
+
+    t.test('unset maxZoom', function(t) {
+        var map = createMap({maxZoom:5});
+        map.setMaxZoom(null);
+        map.setZoom(6);
+        t.equal(map.getZoom(), 6);
+        t.end();
+    });
+
+    t.test('ignore maxZooms over minZoom', function(t) {
+        var map = createMap({minZoom:5});
+        t.throws(function() {
+            map.setMaxZoom(4);
+        });
+        map.setZoom(5);
+        t.equal(map.getZoom(), 5);
+        t.end();
+    });
+
     t.test('#remove', function(t) {
         var map = createMap(),
             removedCanvas,
@@ -460,7 +548,51 @@ test('Map', function(t) {
             });
 
             map.on('style.load', function () {
+                map.style.dispatcher.broadcast = function(key, value) {
+                    t.equal(key, 'update layers');
+                    t.deepEqual(value.map(function(layer) { return layer.id; }), ['symbol']);
+                };
+
                 map.setLayoutProperty('symbol', 'text-transform', 'lowercase');
+                t.deepEqual(map.getLayoutProperty('symbol', 'text-transform'), 'lowercase');
+                t.end();
+            });
+        });
+
+        t.test('sets property on parent layer', function (t) {
+            var map = createMap({
+                style: {
+                    "version": 8,
+                    "sources": {
+                        "geojson": {
+                            "type": "geojson",
+                            "data": {
+                                "type": "FeatureCollection",
+                                "features": []
+                            }
+                        }
+                    },
+                    "layers": [{
+                        "id": "symbol",
+                        "type": "symbol",
+                        "source": "geojson",
+                        "layout": {
+                            "text-transform": "uppercase"
+                        }
+                    }, {
+                        "id": "symbol-ref",
+                        "ref": "symbol"
+                    }]
+                }
+            });
+
+            map.on('style.load', function () {
+                map.style.dispatcher.broadcast = function(key, value) {
+                    t.equal(key, 'update layers');
+                    t.deepEqual(value.map(function(layer) { return layer.id; }), ['symbol']);
+                };
+
+                map.setLayoutProperty('symbol-ref', 'text-transform', 'lowercase');
                 t.deepEqual(map.getLayoutProperty('symbol', 'text-transform'), 'lowercase');
                 t.end();
             });

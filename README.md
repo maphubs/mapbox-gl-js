@@ -1,4 +1,4 @@
-[![Build Status](https://circleci.com/gh/mapbox/mapbox-gl-js.svg?style=svg)](https://circleci.com/gh/mapbox/mapbox-gl-js)
+[![Build Status](https://circleci.com/gh/mapbox/mapbox-gl-js.svg?style=svg)](https://circleci.com/gh/mapbox/mapbox-gl-js) [![Coverage Status](https://coveralls.io/repos/github/mapbox/mapbox-gl-js/badge.svg?branch=coveralls)](https://coveralls.io/github/mapbox/mapbox-gl-js?branch=coveralls)
 
 A WebGL JavaScript interactive maps library that can render [Mapbox Vector Tiles](https://www.mapbox.com/blog/vector-tiles/).
 
@@ -65,12 +65,13 @@ npm install
 
 ### Serving the Debug Page
 
-To serve the debug page, run
+Start the debug server
 
 ```bash
-npm start &
-open "http://localhost:9966/debug/?access_token=<INSERT YOUR ACCESS TOKEN>"
+MAPBOX_ACCESS_TOKEN={YOUR MAPBOX ACCESS TOKEN} npm start
 ```
+
+Open the debug page at [http://localhost:9966](http://localhost:9966)
 
 ### Creating a Standalone Build
 
@@ -90,20 +91,13 @@ There are two test suites associated with Mapbox GL JS
  - `npm test` runs quick unit tests
  - `npm run test-suite` runs slower rendering tests from the [mapbox-gl-test-suite](https://github.com/mapbox/mapbox-gl-test-suite) repository
 
-### Running the FPS Benchmark
+### Running Benchmarks
 
-The FPS benchmarking page compares the performance of your local copy of GL JS against previously released versions. Benchmarking configuration is within `bench/fps/site.js`.
-
-To serve the FPS benchmark page:
-
-```bash
-$ npm start &
-$ open "http://localhost:9966/bench/fps/?access_token="`echo $MapboxAccessToken`
-```
+See [`bench/README.md`](https://github.com/mapbox/mapbox-gl-js/blob/master/bench/README.md).
 
 ### Writing Documentation
 
-See [docs/README.md](https://github.com/mapbox/mapbox-gl-js/blob/master/docs/README.md).
+See [`docs/README.md`](https://github.com/mapbox/mapbox-gl-js/blob/master/docs/README.md).
 
 ### Recommended Reading
 

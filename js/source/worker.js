@@ -2,6 +2,7 @@
 
 var Actor = require('../util/actor');
 var WorkerTile = require('./worker_tile');
+var StyleLayer = require('../style/style_layer');
 var util = require('../util/util');
 var ajax = require('../util/ajax');
 var vt = require('vector-tile');
@@ -9,7 +10,9 @@ var Protobuf = require('pbf');
 var supercluster = require('supercluster');
 
 var geojsonvt = require('geojson-vt');
+var rewind = require('geojson-rewind');
 var GeoJSONWrapper = require('./geojson_wrapper');
+var vtpbf = require('vt-pbf');
 
 module.exports = function(self) {
     return new Worker(self);
@@ -21,24 +24,72 @@ function Worker(self) {
     this.loading = {};
 
     this.loaded = {};
-    this.layers = [];
     this.geoJSONIndexes = {};
 }
 
 util.extend(Worker.prototype, {
     'set layers': function(layers) {
-        this.layers = layers;
+        this.layers = {};
+        var that = this;
+
+        // Filter layers and create an id -> layer map
+        var childLayerIndicies = [];
+        for (var i = 0; i < layers.length; i++) {
+            var layer = layers[i];
+            if (layer.type === 'fill' || layer.type === 'line' || layer.type === 'circle' || layer.type === 'symbol') {
+                if (layer.ref) {
+                    childLayerIndicies.push(i);
+                } else {
+                    setLayer(layer);
+                }
+            }
+        }
+
+        // Create an instance of StyleLayer per layer
+        for (var j = 0; j < childLayerIndicies.length; j++) {
+            setLayer(layers[childLayerIndicies[j]]);
+        }
+
+        function setLayer(serializedLayer) {
+            var styleLayer = StyleLayer.create(
+                serializedLayer,
+                serializedLayer.ref && that.layers[serializedLayer.ref]
+            );
+            styleLayer.updatePaintTransitions({}, {transition: false});
+            that.layers[styleLayer.id] = styleLayer;
+        }
+
+        this.layerFamilies = createLayerFamilies(this.layers);
     },
 
     'update layers': function(layers) {
-        var layersById = {};
-        var i;
-        for (i = 0; i < layers.length; i++) {
-            layersById[layers[i].id] = layers[i];
+        var that = this;
+        var id;
+        var layer;
+
+        // Update ref parents
+        for (id in layers) {
+            layer = layers[id];
+            if (layer.ref) updateLayer(layer);
         }
-        for (i = 0; i < this.layers.length; i++) {
-            this.layers[i] = layersById[this.layers[i].id] || this.layers[i];
+
+        // Update ref children
+        for (id in layers) {
+            layer = layers[id];
+            if (!layer.ref) updateLayer(layer);
         }
+
+        function updateLayer(layer) {
+            var refLayer = that.layers[layer.ref];
+            if (that.layers[layer.id]) {
+                that.layers[layer.id].set(layer, refLayer);
+            } else {
+                that.layers[layer.id] = StyleLayer.create(layer, refLayer);
+            }
+            that.layers[layer.id].updatePaintTransitions({}, {transition: false});
+        }
+
+        this.layerFamilies = createLayerFamilies(this.layers);
     },
 
     'load tile': function(params, callback) {
@@ -59,7 +110,7 @@ util.extend(Worker.prototype, {
             if (err) return callback(err);
 
             tile.data = new vt.VectorTile(new Protobuf(new Uint8Array(data)));
-            tile.parse(tile.data, this.layers, this.actor, callback);
+            tile.parse(tile.data, this.layerFamilies, this.actor, data, callback);
 
             this.loaded[source] = this.loaded[source] || {};
             this.loaded[source][uid] = tile;
@@ -71,7 +122,7 @@ util.extend(Worker.prototype, {
             uid = params.uid;
         if (loaded && loaded[uid]) {
             var tile = loaded[uid];
-            tile.parse(tile.data, this.layers, this.actor, callback);
+            tile.parse(tile.data, this.layerFamilies, this.actor, params.rawTileData, callback);
         }
     },
 
@@ -99,7 +150,7 @@ util.extend(Worker.prototype, {
 
         if (loaded && loaded[uid]) {
             var tile = loaded[uid];
-            var result = tile.redoPlacement(params.angle, params.pitch, params.collisionDebug);
+            var result = tile.redoPlacement(params.angle, params.pitch, params.showCollisionBoxes);
 
             if (result.result) {
                 callback(null, result.result, result.transferables);
@@ -112,6 +163,7 @@ util.extend(Worker.prototype, {
 
     'parse geojson': function(params, callback) {
         var indexData = function(err, data) {
+            rewind(data, true);
             if (err) return callback(err);
             if (typeof data != 'object') {
                 return callback(new Error("Input data is not a valid GeoJSON object."));
@@ -153,21 +205,39 @@ util.extend(Worker.prototype, {
 
         // if (!geoJSONTile) console.log('not found', this.geoJSONIndexes[source], coord);
 
-        if (!geoJSONTile) return callback(null, null); // nothing in the given tile
-
-        var tile = new WorkerTile(params);
-        tile.parse(new GeoJSONWrapper(geoJSONTile.features), this.layers, this.actor, callback);
+        var tile = geoJSONTile ? new WorkerTile(params) : undefined;
 
         this.loaded[source] = this.loaded[source] || {};
         this.loaded[source][params.uid] = tile;
-    },
 
-    'query features': function(params, callback) {
-        var tile = this.loaded[params.source] && this.loaded[params.source][params.uid];
-        if (tile) {
-            tile.featureTree.query(params, callback);
+        if (geoJSONTile) {
+            var geojsonWrapper = new GeoJSONWrapper(geoJSONTile.features);
+            geojsonWrapper.name = '_geojsonTileLayer';
+            var rawTileData = vtpbf({ layers: { '_geojsonTileLayer': geojsonWrapper }}).buffer;
+            tile.parse(geojsonWrapper, this.layerFamilies, this.actor, rawTileData, callback);
         } else {
-            callback(null, []);
+            return callback(null, null); // nothing in the given tile
         }
     }
 });
+
+function createLayerFamilies(layers) {
+    var families = {};
+
+    for (var layerId in layers) {
+        var layer = layers[layerId];
+        var parentLayerId = layer.ref || layer.id;
+        var parentLayer = layers[parentLayerId];
+
+        if (parentLayer.layout && parentLayer.layout.visibility === 'none') continue;
+
+        families[parentLayerId] = families[parentLayerId] || [];
+        if (layerId === parentLayerId) {
+            families[parentLayerId].unshift(layer);
+        } else {
+            families[parentLayerId].push(layer);
+        }
+    }
+
+    return families;
+}

@@ -4,6 +4,7 @@ var Tile = require('./tile');
 var TileCoord = require('./tile_coord');
 var Point = require('point-geometry');
 var Cache = require('../util/lru_cache');
+var Coordinate = require('../geo/coordinate');
 var util = require('../util/util');
 var EXTENT = require('../data/bucket').EXTENT;
 
@@ -378,63 +379,84 @@ TilePyramid.prototype = {
     },
 
     /**
-     * For a given coordinate, search through our current tiles and attempt
-     * to find a tile at that point
-     * @param {Coordinate} coord
-     * @returns {Object} tile
-     * @private
-     */
-    tileAt: function(coord) {
-        var ids = this.orderedIDs();
-        for (var i = 0; i < ids.length; i++) {
-            var tile = this._tiles[ids[i]];
-            var pos = tile.positionAt(coord);
-            if (pos && pos.x >= 0 && pos.x < EXTENT && pos.y >= 0 && pos.y < EXTENT) {
-                // The click is within the viewport. There is only ever one tile in
-                // a layer that has this property.
-                return {
-                    tile: tile,
-                    x: pos.x,
-                    y: pos.y,
-                    scale: Math.pow(2, this.transform.zoom - tile.coord.z),
-                    tileSize: tile.tileSize
-                };
-            }
-        }
-    },
-
-    /**
      * Search through our current tiles and attempt to find the tiles that
      * cover the given bounds.
-     * @param {Array<Coordinate>} bounds [minxminy, maxxmaxy] coordinates of the corners of bounding rectangle
+     * @param {Array<Coordinate>} queryGeometry coordinates of the corners of bounding rectangle
      * @returns {Array<Object>} result items have {tile, minX, maxX, minY, maxY}, where min/max bounding values are the given bounds transformed in into the coordinate space of this tile.
      * @private
      */
-    tilesIn: function(bounds) {
-        var result = [];
+    tilesIn: function(queryGeometry) {
+        var tileResults = {};
         var ids = this.orderedIDs();
+
+        var minX = Infinity;
+        var minY = Infinity;
+        var maxX = -Infinity;
+        var maxY = -Infinity;
+        var z = queryGeometry[0].zoom;
+
+        for (var k = 0; k < queryGeometry.length; k++) {
+            var p = queryGeometry[k];
+            minX = Math.min(minX, p.column);
+            minY = Math.min(minY, p.row);
+            maxX = Math.max(maxX, p.column);
+            maxY = Math.max(maxY, p.row);
+        }
 
         for (var i = 0; i < ids.length; i++) {
             var tile = this._tiles[ids[i]];
+            var coord = TileCoord.fromID(ids[i]);
+
             var tileSpaceBounds = [
-                tile.positionAt(bounds[0]),
-                tile.positionAt(bounds[1])
+                coordinateToTilePoint(coord, tile.sourceMaxZoom, new Coordinate(minX, minY, z)),
+                coordinateToTilePoint(coord, tile.sourceMaxZoom, new Coordinate(maxX, maxY, z))
             ];
+
             if (tileSpaceBounds[0].x < EXTENT && tileSpaceBounds[0].y < EXTENT &&
                 tileSpaceBounds[1].x >= 0 && tileSpaceBounds[1].y >= 0) {
-                result.push({
-                    tile: tile,
-                    minX: tileSpaceBounds[0].x,
-                    maxX: tileSpaceBounds[1].x,
-                    minY: tileSpaceBounds[0].y,
-                    maxY: tileSpaceBounds[1].y
-                });
+
+                var tileSpaceQueryGeometry = [];
+                for (var j = 0; j < queryGeometry.length; j++) {
+                    tileSpaceQueryGeometry.push(coordinateToTilePoint(coord, tile.sourceMaxZoom, queryGeometry[j]));
+                }
+
+                var tileResult = tileResults[tile.coord.id];
+                if (tileResult === undefined) {
+                    tileResult = tileResults[tile.coord.id] = {
+                        tile: tile,
+                        queryGeometry: [],
+                        scale: Math.pow(2, this.transform.zoom - tile.coord.z)
+                    };
+                }
+
+                // Wrapped tiles share one tileResult object but can have multiple queryGeometry parts
+                tileResult.queryGeometry.push(tileSpaceQueryGeometry);
             }
         }
 
-        return result;
+        var results = [];
+        for (var t in tileResults) {
+            results.push(tileResults[t]);
+        }
+        return results;
     }
 };
+
+/**
+ * Convert a coordinate to a point in a tile's coordinate space.
+ * @param {Coordinate} tileCoord
+ * @param {Coordinate} coord
+ * @returns {Object} position
+ * @private
+ */
+function coordinateToTilePoint(tileCoord, sourceMaxZoom, coord) {
+    var zoomedCoord = coord.zoomTo(Math.min(tileCoord.z, sourceMaxZoom));
+    return {
+        x: (zoomedCoord.column - (tileCoord.x + tileCoord.w * Math.pow(2, tileCoord.z))) * EXTENT,
+        y: (zoomedCoord.row - tileCoord.y) * EXTENT
+    };
+
+}
 
 function compareKeyZoom(a, b) {
     return (a % 32) - (b % 32);

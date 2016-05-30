@@ -13,16 +13,19 @@ function MessageBus(addListeners, postListeners) {
             }
         },
         postMessage: function(data) {
-            setTimeout(function() {
+            setImmediate(function() {
                 for (var i = 0; i < postListeners.length; i++) {
                     postListeners[i]({data: data, target: this.target});
                 }
-            }.bind(this), 0);
+            }.bind(this));
         }
     };
 }
 
 function Dispatcher(length, parent) {
+
+    this.actors = new Array(length);
+
     var parentListeners = [],
         workerListeners = [],
         parentBus = new MessageBus(workerListeners, parentListeners),

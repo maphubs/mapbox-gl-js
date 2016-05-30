@@ -4,14 +4,15 @@ var VT = require('vector-tile');
 var Protobuf = require('pbf');
 var assert = require('assert');
 
-var WorkerTile = require('../js/source/worker_tile');
-var ajax = require('../js/util/ajax');
-var Style = require('../js/style/style');
-var util = require('../js/util/util');
-var Evented = require('../js/util/evented');
-var config = require('../js/util/config');
-var coordinates = require('./coordinates');
-var formatNumber = require('./format_number');
+var WorkerTile = require('../../js/source/worker_tile');
+var Worker = require('../../js/source/worker');
+var ajax = require('../../js/util/ajax');
+var Style = require('../../js/style/style');
+var util = require('../../js/util/util');
+var Evented = require('../../js/util/evented');
+var config = require('../../js/util/config');
+var coordinates = require('../lib/coordinates');
+var formatNumber = require('../lib/format_number');
 
 var SAMPLE_COUNT = 10;
 
@@ -125,13 +126,7 @@ function preloadAssets(stylesheet, callback) {
 function runSample(stylesheet, getGlyphs, getIcons, getTile, callback) {
     var timeStart = performance.now();
 
-    var layers = [];
-    for (var i = 0; i < stylesheet.layers.length; i++) {
-        var layer = stylesheet.layers[i];
-        if (!layer.ref && (layer.type === 'fill' || layer.type === 'line' || layer.type === 'circle' || layer.type === 'symbol')) {
-            layers.push(layer);
-        }
-    }
+    var layerFamilies = createLayerFamilies(stylesheet.layers);
 
     util.asyncAll(coordinates, function(coordinate, eachCallback) {
         var url = 'https://a.tiles.mapbox.com/v4/mapbox.mapbox-terrain-v2,mapbox.mapbox-streets-v6/' + coordinate.zoom + '/' + coordinate.row + '/' + coordinate.column + '.vector.pbf?access_token=' + config.ACCESS_TOKEN;
@@ -143,7 +138,7 @@ function runSample(stylesheet, getGlyphs, getIcons, getTile, callback) {
             overscaling: 1,
             angle: 0,
             pitch: 0,
-            collisionDebug: false,
+            showCollisionBoxes: false,
             source: 'composite',
             uid: url
         });
@@ -163,7 +158,7 @@ function runSample(stylesheet, getGlyphs, getIcons, getTile, callback) {
         getTile(url, function(err, response) {
             if (err) throw err;
             var data = new VT.VectorTile(new Protobuf(new Uint8Array(response)));
-            workerTile.parse(data, layers, actor, function(err) {
+            workerTile.parse(data, layerFamilies, actor, null, function(err) {
                 if (err) return callback(err);
                 eachCallback();
             });
@@ -183,4 +178,17 @@ function asyncTimesSeries(times, work, callback) {
     } else {
         callback();
     }
+}
+
+var createLayerFamiliesCacheKey;
+var createLayerFamiliesCacheValue;
+function createLayerFamilies(layers) {
+    if (layers !== createLayerFamiliesCacheKey) {
+        var worker = new Worker({addEventListener: function() {} });
+        worker['set layers'](layers);
+
+        createLayerFamiliesCacheKey = layers;
+        createLayerFamiliesCacheValue = worker.layerFamilies;
+    }
+    return createLayerFamiliesCacheValue;
 }

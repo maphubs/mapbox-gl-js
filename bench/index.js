@@ -14,9 +14,20 @@ function main() {
     log('dark', 'please keep this window in the foreground and close the debugger');
 
     var benchmarks = {
-        buffer: require('./buffer_benchmark'),
-        fps: require('./fps_benchmark')
+        buffer: require('./benchmarks/buffer'),
+        fps: require('./benchmarks/fps'),
+        'frame-duration': require('./benchmarks/frame_duration'),
+        'query-point': require('./benchmarks/query_point'),
+        'query-box': require('./benchmarks/query_box'),
+        'geojson-setdata-small': require('./benchmarks/geojson_setdata_small'),
+        'geojson-setdata-large': require('./benchmarks/geojson_setdata_large')
     };
+
+    var benchmarksDiv = document.getElementById('benchmarks');
+
+    Object.keys(benchmarks).forEach(function(id) {
+        benchmarksDiv.innerHTML += '<a href="/bench/' + id + '" class="button">' + id + '</a>';
+    });
 
     var pathnameArray = location.pathname.split('/');
     var benchmarkName = pathnameArray[pathnameArray.length - 1] || pathnameArray[pathnameArray.length - 2];

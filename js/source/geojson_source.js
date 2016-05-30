@@ -58,7 +58,7 @@ function GeoJSONSource(options) {
 
     this.cluster = options.cluster || false;
     this.superclusterOptions = {
-        maxZoom: Math.max(options.clusterMaxZoom, this.maxzoom - 1) || (this.maxzoom - 1),
+        maxZoom: Math.min(options.clusterMaxZoom, this.maxzoom - 1) || (this.maxzoom - 1),
         extent: EXTENT,
         radius: (options.clusterRadius || 50) * scale,
         log: false
@@ -137,8 +137,8 @@ GeoJSONSource.prototype = util.inherit(Evented, /** @lends GeoJSONSource.prototy
     getVisibleCoordinates: Source._getVisibleCoordinates,
     getTile: Source._getTile,
 
-    featuresAt: Source._vectorFeaturesAt,
-    featuresIn: Source._vectorFeaturesIn,
+    queryRenderedFeatures: Source._queryRenderedVectorFeatures,
+    querySourceFeatures: Source._querySourceFeatures,
 
     _updateData: function() {
         this._dirty = false;
@@ -180,7 +180,7 @@ GeoJSONSource.prototype = util.inherit(Evented, /** @lends GeoJSONSource.prototy
             overscaling: overscaling,
             angle: this.map.transform.angle,
             pitch: this.map.transform.pitch,
-            collisionDebug: this.map.collisionDebug
+            showCollisionBoxes: this.map.showCollisionBoxes
         };
 
         tile.workerID = this.dispatcher.send('load geojson tile', params, function(err, data) {
@@ -195,7 +195,7 @@ GeoJSONSource.prototype = util.inherit(Evented, /** @lends GeoJSONSource.prototy
                 return;
             }
 
-            tile.loadVectorData(data);
+            tile.loadVectorData(data, this.map.style);
 
             if (tile.redoWhenDone) {
                 tile.redoWhenDone = false;

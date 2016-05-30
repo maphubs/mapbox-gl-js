@@ -1,6 +1,6 @@
 'use strict';
 
-var test = require('prova');
+var test = require('tap').test;
 var TileCoord = require('../../../js/source/tile_coord');
 
 test('TileCoord', function(t) {
@@ -28,6 +28,8 @@ test('TileCoord', function(t) {
             t.deepEqual(new TileCoord(1, 1, 1).toString(), '1/1/1');
             t.end();
         });
+
+        t.end();
     });
 
     t.test('.fromID', function(t) {
@@ -36,6 +38,8 @@ test('TileCoord', function(t) {
             t.deepEqual(TileCoord.fromID(0), new TileCoord(0, 0, 0, 0));
             t.end();
         });
+
+        t.end();
     });
 
     t.test('.url', function(t) {
@@ -60,6 +64,8 @@ test('TileCoord', function(t) {
             t.equal(TileCoord.fromID(32).parent(), null);
             t.end();
         });
+
+        t.end();
     });
 
     t.test('.cover', function(t) {
@@ -72,7 +78,7 @@ test('TileCoord', function(t) {
                     {column: 0, row: 2, zoom: 2}
                 ],
                 res = TileCoord.cover(z, coords, z);
-            t.deepEqual(res, [{id: 130, w: 0, x: 0, y: 1, z: 2}]);
+            t.deepEqual(res, [{id: 130, w: 0, x: 0, y: 1, z: 2, posMatrix: null}]);
             t.end();
         });
 
@@ -85,7 +91,7 @@ test('TileCoord', function(t) {
                     {column: 12, row: 2, zoom: 2}
                 ],
                 res = TileCoord.cover(z, coords, z);
-            t.deepEqual(res, [{id: 3202, w: 3, x: 0, y: 1, z: 2}]);
+            t.deepEqual(res, [{id: 3202, w: 3, x: 0, y: 1, z: 2, posMatrix: null}]);
             t.end();
         });
 
@@ -98,7 +104,7 @@ test('TileCoord', function(t) {
                     {column: -1, row: 2, zoom: 2}
                 ],
                 res = TileCoord.cover(z, coords, z);
-            t.deepEqual(res, [{id: 738, w: -1, x: 3, y: 1, z: 2}]);
+            t.deepEqual(res, [{id: 738, w: -1, x: 3, y: 1, z: 2, posMatrix: null}]);
             t.end();
         });
 
@@ -111,7 +117,7 @@ test('TileCoord', function(t) {
                     {column: -13, row: 2, zoom: 2}
                 ],
                 res = TileCoord.cover(z, coords, z);
-            t.deepEqual(res, [{id: 3810, w: -4, x: 3, y: 1, z: 2}]);
+            t.deepEqual(res, [{id: 3810, w: -4, x: 3, y: 1, z: 2, posMatrix: null}]);
             t.end();
         });
 
@@ -124,10 +130,14 @@ test('TileCoord', function(t) {
                     {column: -0.5, row: 2, zoom: 2}
                 ],
                 res = TileCoord.cover(z, coords, z);
-            t.deepEqual(res, [{id: 130, w: 0, x: 0, y: 1, z: 2}, {id: 738, w: -1, x: 3, y: 1, z: 2}]);
+            t.deepEqual(res, [
+                {id: 130, w: 0, x: 0, y: 1, z: 2, posMatrix: null},
+                {id: 738, w: -1, x: 3, y: 1, z: 2, posMatrix: null}]);
             t.end();
         });
 
+        t.end();
     });
 
+    t.end();
 });

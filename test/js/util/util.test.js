@@ -1,6 +1,6 @@
 'use strict';
 
-var test = require('prova');
+var test = require('tap').test;
 var Coordinate = require('../../../js/geo/coordinate');
 var util = require('../../../js/util/util');
 
@@ -9,7 +9,7 @@ test('util', function(t) {
     t.equal(util.easeCubicInOut(0.2), 0.03200000000000001);
     t.equal(util.easeCubicInOut(0.5), 0.5, 'easeCubicInOut=0.5');
     t.equal(util.easeCubicInOut(1), 1, 'easeCubicInOut=1');
-    t.deepEqual(util.premultiply([0, 0.5, 1, 0.5], 0.5), [0, 0.125, 0.25, 0.25], 'premultiply');
+    t.deepEqual(util.premultiply([0, 0.5, 1, 0.5]), [0, 0.25, 0.5, 0.5], 'premultiply');
     t.deepEqual(util.keysDifference({a:1}, {}), ['a'], 'keysDifference');
     t.deepEqual(util.keysDifference({a:1}, {a:1}), [], 'keysDifference');
     t.deepEqual(util.extend({a:1}, {b:2}), {a:1, b:2}, 'extend');
@@ -17,24 +17,6 @@ test('util', function(t) {
     t.deepEqual(util.pick({a:1, b:2, c:3}, ['a', 'c']), {a:1, c:3}, 'pick');
     t.deepEqual(util.pick({a:1, b:2, c:3}, ['a', 'c', 'd']), {a:1, c:3}, 'pick');
     t.ok(typeof util.uniqueId() === 'number', 'uniqueId');
-
-    t.test('throttle', function(t) {
-        var values = [];
-        var fn = util.throttle(function(val) {
-            t.deepEqual(this, { foo: 'bar' });
-            values.push(val);
-            if (values.length === 2) {
-                t.deepEqual(values, [1, 42]);
-                t.end();
-            }
-        }, 40, { foo: 'bar' });
-        fn(1);
-        fn(2);
-        fn(3);
-        setTimeout(function() {
-            fn(42);
-        }, 20);
-    });
 
     t.test('inherit', function(t) {
         function Inheritance() { }
@@ -117,8 +99,8 @@ test('util', function(t) {
         }, function(err, results) {
             t.ifError(err);
             t.deepEqual(results, [0, 1, 2]);
-            t.end();
         }));
+        t.end();
     });
 
     t.test('asyncAll - async', function(t) {
@@ -151,8 +133,8 @@ test('util', function(t) {
         }, function(err, results) {
             t.ifError(err);
             t.deepEqual(results, []);
-            t.end();
         }));
+        t.end();
     });
 
     t.test('coalesce', function(t) {
@@ -271,6 +253,42 @@ test('util', function(t) {
 
         t.ok(util.deepEqual(a, b));
         t.notOk(util.deepEqual(a, c));
+
+        t.end();
+    });
+
+    t.test('clone', function(t) {
+        t.test('array', function(t) {
+            var input = [false, 1, 'two'];
+            var output = util.clone(input);
+            t.notEqual(input, output);
+            t.deepEqual(input, output);
+            t.end();
+        });
+
+        t.test('object', function(t) {
+            var input = {a: false, b: 1, c: 'two'};
+            var output = util.clone(input);
+            t.notEqual(input, output);
+            t.deepEqual(input, output);
+            t.end();
+        });
+
+        t.test('deep object', function(t) {
+            var input = {object: {a: false, b: 1, c: 'two'}};
+            var output = util.clone(input);
+            t.notEqual(input.object, output.object);
+            t.deepEqual(input.object, output.object);
+            t.end();
+        });
+
+        t.test('deep array', function(t) {
+            var input = {array: [false, 1, 'two']};
+            var output = util.clone(input);
+            t.notEqual(input.array, output.array);
+            t.deepEqual(input.array, output.array);
+            t.end();
+        });
 
         t.end();
     });

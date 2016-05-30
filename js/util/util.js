@@ -55,14 +55,12 @@ exports.ease = exports.bezier(0.25, 0.1, 0.25, 1);
  * by the A (alpha) component
  *
  * @param {Array<number>} color color array
- * @param {number} [additionalOpacity] additional opacity to be multiplied into
- *     the color's alpha component.
  * @returns {Array<number>} premultiplied color array
  * @private
  */
-exports.premultiply = function (color, additionalOpacity) {
+exports.premultiply = function (color) {
     if (!color) return null;
-    var opacity = color[3] * additionalOpacity;
+    var opacity = color[3];
     return [
         color[0] * opacity,
         color[1] * opacity,
@@ -242,43 +240,6 @@ var id = 1;
  */
 exports.uniqueId = function () {
     return id++;
-};
-
-/**
- * Create a version of `fn` that only fires once every `time` millseconds.
- *
- * @param {Function} fn the function to be throttled
- * @param {number} time millseconds required between function calls
- * @param {*} context the value of `this` with which the function is called
- * @returns {Function} debounced function
- * @private
- */
-exports.throttle = function (fn, time, context) {
-    var lock, args, wrapperFn, later;
-
-    later = function () {
-        // reset lock and call if queued
-        lock = false;
-        if (args) {
-            wrapperFn.apply(context, args);
-            args = false;
-        }
-    };
-
-    wrapperFn = function () {
-        if (lock) {
-            // called too soon, queue to call later
-            args = arguments;
-
-        } else {
-            // call and lock until later
-            fn.apply(context, arguments);
-            setTimeout(later, time);
-            lock = true;
-        }
-    };
-
-    return wrapperFn;
 };
 
 /**
@@ -472,4 +433,35 @@ exports.deepEqual = function deepEqual(a, b) {
         return true;
     }
     return a === b;
+};
+
+/**
+ * Deeply clones two objects.
+ * @param {Object} obj1
+ * @param {Object} obj2
+ * @returns {boolean}
+ * @private
+ */
+exports.clone = function deepEqual(input) {
+    if (Array.isArray(input)) {
+        return input.map(exports.clone);
+    } else if (typeof input === 'object') {
+        return exports.mapObject(input, exports.clone);
+    } else {
+        return input;
+    }
+};
+
+/**
+ * Check if two arrays have at least one common element.
+ * @param {Array} a
+ * @param {Array} b
+ * @returns {boolean}
+ * @private
+ */
+exports.arraysIntersect = function(a, b) {
+    for (var l = 0; l < a.length; l++) {
+        if (b.indexOf(a[l]) >= 0) return true;
+    }
+    return false;
 };

@@ -1,7 +1,6 @@
 'use strict';
 
 var browser = require('../util/browser');
-var util = require('../util/util');
 
 module.exports = drawCircles;
 
@@ -10,9 +9,6 @@ function drawCircles(painter, source, layer, coords) {
 
     var gl = painter.gl;
 
-    var shader = painter.circleShader;
-    painter.gl.switchShader(shader);
-
     painter.setDepthSublayer(0);
     painter.depthMask(false);
 
@@ -20,49 +16,35 @@ function drawCircles(painter, source, layer, coords) {
     // large circles are not clipped to tiles
     gl.disable(gl.STENCIL_TEST);
 
-    // antialiasing factor: this is a minimum blur distance that serves as
-    // a faux-antialiasing for the circle. since blur is a ratio of the circle's
-    // size and the intent is to keep the blur at roughly 1px, the two
-    // are inversely related.
-    var antialias = 1 / browser.devicePixelRatio / layer.paint['circle-radius'];
-
-    var color = util.premultiply(layer.paint['circle-color'], layer.paint['circle-opacity']);
-    gl.uniform4fv(shader.u_color, color);
-    gl.uniform1f(shader.u_blur, Math.max(layer.paint['circle-blur'], antialias));
-    gl.uniform1f(shader.u_size, layer.paint['circle-radius']);
-
     for (var i = 0; i < coords.length; i++) {
         var coord = coords[i];
 
         var tile = source.getTile(coord);
         var bucket = tile.getBucket(layer);
         if (!bucket) continue;
-        var elementGroups = bucket.elementGroups.circle;
-        if (!elementGroups) continue;
+        var bufferGroups = bucket.bufferGroups.circle;
+        if (!bufferGroups) continue;
 
-        var vertex = bucket.buffers.circleVertex;
-        var elements = bucket.buffers.circleElement;
+        var program = painter.useProgram('circle', bucket.getProgramMacros('circle', layer));
 
-        gl.setPosMatrix(painter.translatePosMatrix(
-            painter.calculatePosMatrix(coord, source.maxzoom),
+        gl.uniform2fv(program.u_extrude_scale, painter.transform.pixelsToGLUnits);
+        gl.uniform1f(program.u_blur, layer.paint['circle-blur']);
+        gl.uniform1f(program.u_devicepixelratio, browser.devicePixelRatio);
+        gl.uniform1f(program.u_opacity, layer.paint['circle-opacity']);
+
+        gl.uniformMatrix4fv(program.u_matrix, false, painter.translatePosMatrix(
+            coord.posMatrix,
             tile,
             layer.paint['circle-translate'],
             layer.paint['circle-translate-anchor']
         ));
-        gl.setExMatrix(painter.transform.exMatrix);
 
-        for (var k = 0; k < elementGroups.length; k++) {
-            var group = elementGroups[k];
-            var offset = group.vertexStartIndex * vertex.itemSize;
+        bucket.setUniforms(gl, 'circle', program, layer, {zoom: painter.transform.zoom});
 
-            vertex.bind(gl);
-            vertex.setAttribPointers(gl, shader, offset);
-
-            elements.bind(gl);
-
-            var count = group.elementLength * 3;
-            var elementOffset = group.elementStartIndex * elements.itemSize;
-            gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_SHORT, elementOffset);
+        for (var k = 0; k < bufferGroups.length; k++) {
+            var group = bufferGroups[k];
+            group.vaos[layer.id].bind(gl, program, group.layout.vertex, group.layout.element, group.paint[layer.id]);
+            gl.drawElements(gl.TRIANGLES, group.layout.element.length * 3, gl.UNSIGNED_SHORT, 0);
         }
     }
 }

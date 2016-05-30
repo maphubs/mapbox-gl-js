@@ -1,6 +1,6 @@
 'use strict';
 
-var test = require('prova');
+var test = require('tap').test;
 var TilePyramid = require('../../../js/source/tile_pyramid');
 var TileCoord = require('../../../js/source/tile_coord');
 var Transform = require('../../../js/geo/transform');
@@ -177,6 +177,8 @@ test('TilePyramid#addTile', function(t) {
 
         t.end();
     });
+
+    t.end();
 });
 
 test('TilePyramid#removeTile', function(t) {
@@ -239,80 +241,7 @@ test('TilePyramid#removeTile', function(t) {
 
         t.end();
     });
-});
 
-test('TilePyramid#tileAt', function(t) {
-    t.test('regular tile', function(t) {
-        var pyramid = createPyramid({
-            load: function(tile) { tile.loaded = true; },
-            minzoom: 1,
-            maxzoom: 1,
-            tileSize: 512
-        });
-
-        var transform = new Transform();
-        transform.resize(512, 512);
-        transform.zoom = 1.5;
-        pyramid.update(true, transform);
-
-        var result = pyramid.tileAt(new Coordinate(0, 3, 2));
-
-        t.deepEqual(result.tile.coord.id, 65);
-        t.deepEqual(result.scale, 1.4142135623730951);
-        t.deepEqual(result.tileSize, 512);
-        t.deepEqual(result.x, 0);
-        t.deepEqual(result.y, 4096);
-
-        t.end();
-    });
-
-    t.test('reparsed overscaled tile', function(t) {
-        var pyramid = createPyramid({
-            load: function(tile) { tile.loaded = true; },
-            reparseOverscaled: true,
-            minzoom: 1,
-            maxzoom: 1,
-            tileSize: 512
-        });
-
-        var transform = new Transform();
-        transform.resize(512, 512);
-        transform.zoom = 2.5;
-        pyramid.update(true, transform);
-
-        var result = pyramid.tileAt(new Coordinate(0, 3, 2));
-
-        t.deepEqual(result.tile.coord.id, 130);
-        t.deepEqual(result.scale, 1.4142135623730951);
-        t.deepEqual(result.tileSize, 1024);
-        t.deepEqual(result.x, 0);
-        t.deepEqual(result.y, 4096);
-        t.end();
-    });
-
-    t.test('overscaled tile', function(t) {
-        var pyramid = createPyramid({
-            load: function(tile) { tile.loaded = true; },
-            minzoom: 1,
-            maxzoom: 1,
-            tileSize: 512
-        });
-
-        var transform = new Transform();
-        transform.resize(512, 512);
-        transform.zoom = 2.5;
-        pyramid.update(true, transform);
-
-        var result = pyramid.tileAt(new Coordinate(0, 3, 2));
-
-        t.deepEqual(result.tile.coord.id, 65);
-        t.deepEqual(result.scale, 2 * 1.4142135623730951);
-        t.deepEqual(result.tileSize, 512);
-        t.deepEqual(result.x, 0);
-        t.deepEqual(result.y, 4096);
-
-        t.end();
-    });
     t.end();
 });
 
@@ -510,6 +439,8 @@ test('TilePyramid#update', function(t) {
         t.end();
 
     });
+
+    t.end();
 });
 
 test('TilePyramid#clearTiles', function(t) {
@@ -537,49 +468,136 @@ test('TilePyramid#clearTiles', function(t) {
 
         t.end();
     });
+
+    t.end();
 });
 
 test('TilePyramid#tilesIn', function (t) {
-    var transform = new Transform();
-    transform.resize(511, 511);
-    transform.zoom = 1;
+    t.test('regular tiles', function(t) {
+        var transform = new Transform();
+        transform.resize(511, 511);
+        transform.zoom = 1;
 
-    var pyramid = createPyramid({
-        load: function(tile) {
-            tile.loaded = true;
-        }
+        var pyramid = createPyramid({
+            load: function(tile) {
+                tile.loaded = true;
+            }
+        });
+
+        pyramid.update(true, transform);
+
+        t.deepEqual(pyramid.orderedIDs(), [
+            new TileCoord(1, 0, 0).id,
+            new TileCoord(1, 1, 0).id,
+            new TileCoord(1, 0, 1).id,
+            new TileCoord(1, 1, 1).id
+        ]);
+
+        var tiles = pyramid.tilesIn([
+            new Coordinate(0.5, 0.25, 1),
+            new Coordinate(1.5, 0.75, 1)
+        ]);
+
+        tiles.sort(function (a, b) { return a.tile.coord.x - b.tile.coord.x; });
+        tiles.forEach(function (result) { delete result.tile.uid; });
+
+        t.equal(tiles[0].tile.coord.id, 1);
+        t.equal(tiles[0].tile.tileSize, 512);
+        t.equal(tiles[0].scale, 1);
+        t.deepEqual(tiles[0].queryGeometry, [[{x: 4096, y: 2048}, {x:12288, y: 6144}]]);
+
+        t.equal(tiles[1].tile.coord.id, 33);
+        t.equal(tiles[1].tile.tileSize, 512);
+        t.equal(tiles[1].scale, 1);
+        t.deepEqual(tiles[1].queryGeometry, [[{x: -4096, y: 2048}, {x: 4096, y: 6144}]]);
+
+        t.end();
     });
 
-    pyramid.update(true, transform);
+    t.test('reparsed overscaled tiles', function(t) {
+        var pyramid = createPyramid({
+            load: function(tile) { tile.loaded = true; },
+            reparseOverscaled: true,
+            minzoom: 1,
+            maxzoom: 1,
+            tileSize: 512
+        });
 
-    t.deepEqual(pyramid.orderedIDs(), [
-        new TileCoord(1, 0, 0).id,
-        new TileCoord(1, 1, 0).id,
-        new TileCoord(1, 0, 1).id,
-        new TileCoord(1, 1, 1).id
-    ]);
+        var transform = new Transform();
+        transform.resize(512, 512);
+        transform.zoom = 2.0;
+        pyramid.update(true, transform);
 
-    var tiles = pyramid.tilesIn([
-        new Coordinate(0.5, 0.25, 1),
-        new Coordinate(1.5, 0.75, 1)
-    ]);
+        t.deepEqual(pyramid.orderedIDs(), [
+            new TileCoord(2, 0, 0).id,
+            new TileCoord(2, 1, 0).id,
+            new TileCoord(2, 0, 1).id,
+            new TileCoord(2, 1, 1).id
+        ]);
 
-    tiles.sort(function (a, b) { return a.tile.coord.x - b.tile.coord.x; });
-    tiles.forEach(function (result) { delete result.tile.uid; });
+        var tiles = pyramid.tilesIn([
+            new Coordinate(0.5, 0.25, 1),
+            new Coordinate(1.5, 0.75, 1)
+        ]);
 
-    t.equal(tiles[0].tile.coord.id, 1);
-    t.equal(tiles[0].minX, 4096);
-    t.equal(tiles[0].maxX, 12288);
-    t.equal(tiles[0].minY, 2048);
-    t.equal(tiles[0].maxY, 6144);
+        tiles.sort(function (a, b) { return a.tile.coord.x - b.tile.coord.x; });
+        tiles.forEach(function (result) { delete result.tile.uid; });
 
-    t.equal(tiles[1].tile.coord.id, 33);
-    t.equal(tiles[1].minX, -4096);
-    t.equal(tiles[1].maxX, 4096);
-    t.equal(tiles[1].minY, 2048);
-    t.equal(tiles[1].maxY, 6144);
+        t.equal(tiles[0].tile.coord.id, 2);
+        t.equal(tiles[0].tile.tileSize, 1024);
+        t.equal(tiles[0].scale, 1);
+        t.deepEqual(tiles[0].queryGeometry, [[{x: 4096, y: 2048}, {x:12288, y: 6144}]]);
 
-    t.equal(tiles.length, 2);
+        t.equal(tiles[1].tile.coord.id, 34);
+        t.equal(tiles[1].tile.tileSize, 1024);
+        t.equal(tiles[1].scale, 1);
+        t.deepEqual(tiles[1].queryGeometry, [[{x: -4096, y: 2048}, {x: 4096, y: 6144}]]);
+
+        t.end();
+    });
+
+    t.test('overscaled tiles', function(t) {
+        var pyramid = createPyramid({
+            load: function(tile) { tile.loaded = true; },
+            reparseOverscaled: false,
+            minzoom: 1,
+            maxzoom: 1,
+            tileSize: 512
+        });
+
+        var transform = new Transform();
+        transform.resize(512, 512);
+        transform.zoom = 2.0;
+        pyramid.update(true, transform);
+
+
+        t.deepEqual(pyramid.orderedIDs(), [
+            new TileCoord(1, 0, 0).id,
+            new TileCoord(1, 1, 0).id,
+            new TileCoord(1, 0, 1).id,
+            new TileCoord(1, 1, 1).id
+        ]);
+
+        var tiles = pyramid.tilesIn([
+            new Coordinate(0.5, 0.25, 1),
+            new Coordinate(1.5, 0.75, 1)
+        ]);
+
+        tiles.sort(function (a, b) { return a.tile.coord.x - b.tile.coord.x; });
+        tiles.forEach(function (result) { delete result.tile.uid; });
+
+        t.equal(tiles[0].tile.coord.id, 1);
+        t.equal(tiles[0].tile.tileSize, 512);
+        t.equal(tiles[0].scale, 2);
+        t.deepEqual(tiles[0].queryGeometry, [[{x: 4096, y: 2048}, {x:12288, y: 6144}]]);
+
+        t.equal(tiles[1].tile.coord.id, 33);
+        t.equal(tiles[1].tile.tileSize, 512);
+        t.equal(tiles[1].scale, 2);
+        t.deepEqual(tiles[1].queryGeometry, [[{x: -4096, y: 2048}, {x: 4096, y: 6144}]]);
+
+        t.end();
+    });
 
     t.end();
 });
@@ -661,9 +679,7 @@ test('TilePyramid#findLoadedParent', function(t) {
         t.end();
     });
 
-
     t.test('adds from cache', function(t) {
-        t.end();
         var pyramid = createPyramid({});
         var tr = new Transform();
         tr.width = 512;
@@ -682,10 +698,12 @@ test('TilePyramid#findLoadedParent', function(t) {
         expectedRetain[tile.coord.id] = true;
 
         t.equal(pyramid.findLoadedParent(new TileCoord(2, 3, 3), 0, retain), undefined);
-        t.deepEqual(pyramid.findLoadedParent(new TileCoord(2, 0, 0), 0, retain), tile);
+        t.equal(pyramid.findLoadedParent(new TileCoord(2, 0, 0), 0, retain), tile);
         t.deepEqual(retain, expectedRetain);
         t.equal(pyramid._cache.order.length, 0);
-        t.deepEqual(pyramid._tiles[tile.coord.id], tile);
+        t.equal(pyramid._tiles[tile.coord.id], tile);
+
+        t.end();
     });
 
     t.end();

@@ -1,8 +1,10 @@
 'use strict';
 
-var FeatureTree = require('../data/feature_tree');
+var FeatureIndex = require('../data/feature_index');
 var CollisionTile = require('../symbol/collision_tile');
 var Bucket = require('../data/bucket');
+var CollisionBoxArray = require('../symbol/collision_box');
+var DictionaryCoder = require('../util/dictionary_coder');
 
 module.exports = WorkerTile;
 
@@ -15,14 +17,18 @@ function WorkerTile(params) {
     this.overscaling = params.overscaling;
     this.angle = params.angle;
     this.pitch = params.pitch;
-    this.collisionDebug = params.collisionDebug;
+    this.showCollisionBoxes = params.showCollisionBoxes;
 }
 
-WorkerTile.prototype.parse = function(data, layers, actor, callback) {
+WorkerTile.prototype.parse = function(data, layerFamilies, actor, rawTileData, callback) {
 
     this.status = 'parsing';
+    this.data = data;
 
-    this.featureTree = new FeatureTree(this.coord, this.overscaling);
+    this.collisionBoxArray = new CollisionBoxArray();
+    var collisionTile = new CollisionTile(this.angle, this.pitch, this.collisionBoxArray);
+    var featureIndex = new FeatureIndex(this.coord, this.overscaling, collisionTile, data.layers);
+    var sourceLayerCoder = new DictionaryCoder(data.layers ? Object.keys(data.layers).sort() : ['_geojsonTileLayer']);
 
     var stats = { _total: 0 };
 
@@ -35,37 +41,35 @@ WorkerTile.prototype.parse = function(data, layers, actor, callback) {
     var bucket;
 
     // Map non-ref layers to buckets.
-    for (i = 0; i < layers.length; i++) {
-        layer = layers[i];
+    var bucketIndex = 0;
+    for (var layerId in layerFamilies) {
+        layer = layerFamilies[layerId][0];
 
         if (layer.source !== this.source) continue;
         if (layer.ref) continue;
         if (layer.minzoom && this.zoom < layer.minzoom) continue;
         if (layer.maxzoom && this.zoom >= layer.maxzoom) continue;
         if (layer.layout && layer.layout.visibility === 'none') continue;
+        if (data.layers && !data.layers[layer.sourceLayer]) continue;
 
         bucket = Bucket.create({
             layer: layer,
+            index: bucketIndex++,
+            childLayers: layerFamilies[layerId],
             zoom: this.zoom,
             overscaling: this.overscaling,
-            collisionDebug: this.collisionDebug
+            showCollisionBoxes: this.showCollisionBoxes,
+            collisionBoxArray: this.collisionBoxArray,
+            sourceLayerIndex: sourceLayerCoder.encode(layer.sourceLayer || '_geojsonTileLayer')
         });
         bucket.createFilter();
 
         bucketsById[layer.id] = bucket;
 
         if (data.layers) { // vectortile
-            sourceLayerId = layer['source-layer'];
+            sourceLayerId = layer.sourceLayer;
             bucketsBySourceLayer[sourceLayerId] = bucketsBySourceLayer[sourceLayerId] || {};
             bucketsBySourceLayer[sourceLayerId][layer.id] = bucket;
-        }
-    }
-
-    // Index ref layers.
-    for (i = 0; i < layers.length; i++) {
-        layer = layers[i];
-        if (layer.source === this.source && layer.ref && bucketsById[layer.ref]) {
-            bucketsById[layer.ref].layers.push(layer.id);
         }
     }
 
@@ -84,6 +88,7 @@ WorkerTile.prototype.parse = function(data, layers, actor, callback) {
     function sortLayerIntoBuckets(layer, buckets) {
         for (var i = 0; i < layer.length; i++) {
             var feature = layer.feature(i);
+            feature.index = i;
             for (var id in buckets) {
                 if (buckets[id].filter(feature))
                     buckets[id].features.push(feature);
@@ -95,11 +100,13 @@ WorkerTile.prototype.parse = function(data, layers, actor, callback) {
         symbolBuckets = this.symbolBuckets = [],
         otherBuckets = [];
 
-    var collisionTile = new CollisionTile(this.angle, this.pitch);
+    featureIndex.bucketLayerIDs = {};
 
     for (var id in bucketsById) {
         bucket = bucketsById[id];
         if (bucket.features.length === 0) continue;
+
+        featureIndex.bucketLayerIDs[bucket.index] = bucket.childLayers.map(getLayerId);
 
         buckets.push(bucket);
 
@@ -167,10 +174,11 @@ WorkerTile.prototype.parse = function(data, layers, actor, callback) {
         bucket.populateBuffers(collisionTile, stacks, icons);
         var time = Date.now() - now;
 
-        if (bucket.interactive) {
+
+        if (bucket.type !== 'symbol') {
             for (var i = 0; i < bucket.features.length; i++) {
                 var feature = bucket.features[i];
-                tile.featureTree.insert(feature.bbox(), bucket.layers, feature);
+                featureIndex.insert(feature, feature.index, bucket.sourceLayerIndex, bucket.index);
             }
         }
 
@@ -188,38 +196,64 @@ WorkerTile.prototype.parse = function(data, layers, actor, callback) {
             tile.redoPlacementAfterDone = false;
         }
 
+        var featureIndex_ = featureIndex.serialize();
+        var collisionTile_ = collisionTile.serialize();
+        var collisionBoxArray = tile.collisionBoxArray.serialize();
+        var transferables = [rawTileData].concat(featureIndex_.transferables).concat(collisionTile_.transferables);
+
+        var nonEmptyBuckets = buckets.filter(isBucketEmpty);
+
         callback(null, {
-            buckets: buckets.filter(isBucketEmpty).map(serializeBucket),
-            bucketStats: stats // TODO put this in a separate message?
-        }, getTransferables(buckets));
+            buckets: nonEmptyBuckets.map(serializeBucket),
+            bucketStats: stats, // TODO put this in a separate message?
+            featureIndex: featureIndex_.data,
+            collisionTile: collisionTile_.data,
+            collisionBoxArray: collisionBoxArray,
+            rawTileData: rawTileData
+        }, getTransferables(nonEmptyBuckets).concat(transferables));
     }
 };
 
-WorkerTile.prototype.redoPlacement = function(angle, pitch, collisionDebug) {
+WorkerTile.prototype.redoPlacement = function(angle, pitch, showCollisionBoxes) {
     if (this.status !== 'done') {
         this.redoPlacementAfterDone = true;
         this.angle = angle;
         return {};
     }
 
-    var collisionTile = new CollisionTile(angle, pitch);
+    var collisionTile = new CollisionTile(angle, pitch, this.collisionBoxArray);
+
     var buckets = this.symbolBuckets;
 
     for (var i = buckets.length - 1; i >= 0; i--) {
-        buckets[i].placeFeatures(collisionTile, collisionDebug);
+        buckets[i].placeFeatures(collisionTile, showCollisionBoxes);
     }
+
+    var collisionTile_ = collisionTile.serialize();
+
+    var nonEmptyBuckets = buckets.filter(isBucketEmpty);
 
     return {
         result: {
-            buckets: buckets.filter(isBucketEmpty).map(serializeBucket)
+            buckets: nonEmptyBuckets.map(serializeBucket),
+            collisionTile: collisionTile_.data
         },
-        transferables: getTransferables(buckets)
+        transferables: getTransferables(nonEmptyBuckets).concat(collisionTile_.transferables)
     };
 };
 
 function isBucketEmpty(bucket) {
-    for (var bufferName in bucket.buffers) {
-        if (bucket.buffers[bufferName].length > 0) return true;
+    for (var programName in bucket.arrayGroups) {
+        var programArrayGroups = bucket.arrayGroups[programName];
+        for (var k = 0; k < programArrayGroups.length; k++) {
+            var programArrayGroup = programArrayGroups[k];
+            for (var layoutOrPaint in programArrayGroup) {
+                var arrays = programArrayGroup[layoutOrPaint];
+                for (var bufferName in arrays) {
+                    if (arrays[bufferName].length > 0) return true;
+                }
+            }
+        }
     }
     return false;
 }
@@ -232,9 +266,22 @@ function getTransferables(buckets) {
     var transferables = [];
     for (var i in buckets) {
         var bucket = buckets[i];
-        for (var j in bucket.buffers) {
-            transferables.push(bucket.buffers[j].arrayBuffer);
+        for (var programName in bucket.arrayGroups) {
+            var programArrayGroups = bucket.arrayGroups[programName];
+            for (var k = 0; k < programArrayGroups.length; k++) {
+                var programArrayGroup = programArrayGroups[k];
+                for (var layoutOrPaint in programArrayGroup) {
+                    var arrays = programArrayGroup[layoutOrPaint];
+                    for (var bufferName in arrays) {
+                        transferables.push(arrays[bufferName].arrayBuffer);
+                    }
+                }
+            }
         }
     }
     return transferables;
+}
+
+function getLayerId(layer) {
+    return layer.id;
 }

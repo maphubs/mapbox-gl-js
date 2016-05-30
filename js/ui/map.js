@@ -23,16 +23,13 @@ var Attribution = require('./control/attribution');
 
 var defaultMinZoom = 0;
 var defaultMaxZoom = 20;
-/**
- * Options common to Map#addClass, Map#removeClass, and Map#setClasses, controlling
- * whether or not to smoothly transition property changes triggered by the class change.
- *
- * @typedef {Object} StyleOptions
- * @property {boolean} transition
- */
 
 /**
- * Creates a map instance.
+ * Creates a map instance. This is usually the beginning of your map:
+ * you tell Mapbox GL JS where to put the map by specifying a `container`
+ * option, and the map's style with `style` and other attributes of the map,
+ * and in return Mapbox GL JS initializes the map on your page and returns
+ * a map variable that lets you programmatically call methods on the map.
  * @class Map
  * @param {Object} options
  * @param {string|Element} options.container HTML element to initialize the map in (or element id as string)
@@ -70,7 +67,16 @@ var defaultMaxZoom = 20;
  */
 var Map = module.exports = function(options) {
 
-    options = this.options = util.inherit(this.options, options);
+    options = util.inherit(this.options, options);
+    this._interactive = options.interactive;
+    this._failIfMajorPerformanceCaveat = options.failIfMajorPerformanceCaveat;
+    this._preserveDrawingBuffer = options.preserveDrawingBuffer;
+
+    if (typeof options.container === 'string') {
+        this._container = document.getElementById(options.container);
+    } else {
+        this._container = options.container;
+    }
 
     this.animationLoop = new AnimationLoop();
     this.transform = new Transform(options.minZoom, options.maxZoom);
@@ -121,9 +127,8 @@ var Map = module.exports = function(options) {
         this.jumpTo(options);
     }
 
-    this.sources = {};
     this.stacks = {};
-    this._classes = {};
+    this._classes = [];
 
     this.resize();
 
@@ -182,7 +187,7 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
     },
 
     /**
-     * Adds a style class to a map
+     * Adds a style class to a map.
      *
      * @param {string} klass name of style class
      * @param {StyleOptions} [options]
@@ -190,13 +195,16 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
      * @returns {Map} `this`
      */
     addClass: function(klass, options) {
-        if (this._classes[klass]) return;
-        this._classes[klass] = true;
-        if (this.style) this.style._cascade(this._classes, options);
+        if (this._classes.indexOf(klass) >= 0 || klass === '') return this;
+        this._classes.push(klass);
+        this._classOptions = options;
+
+        if (this.style) this.style.updateClasses();
+        return this._update(true);
     },
 
     /**
-     * Removes a style class from a map
+     * Removes a style class from a map.
      *
      * @param {string} klass name of style class
      * @param {StyleOptions} [options]
@@ -204,13 +212,17 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
      * @returns {Map} `this`
      */
     removeClass: function(klass, options) {
-        if (!this._classes[klass]) return;
-        delete this._classes[klass];
-        if (this.style) this.style._cascade(this._classes, options);
+        var i = this._classes.indexOf(klass);
+        if (i < 0 || klass === '') return this;
+        this._classes.splice(i, 1);
+        this._classOptions = options;
+
+        if (this.style) this.style.updateClasses();
+        return this._update(true);
     },
 
     /**
-     * Helper method to add more than one class
+     * Helper method to add more than one class.
      *
      * @param {Array<string>} klasses An array of class names
      * @param {StyleOptions} [options]
@@ -218,34 +230,42 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
      * @returns {Map} `this`
      */
     setClasses: function(klasses, options) {
-        this._classes = {};
+        var uniqueClasses = {};
         for (var i = 0; i < klasses.length; i++) {
-            this._classes[klasses[i]] = true;
+            if (klasses[i] !== '') uniqueClasses[klasses[i]] = true;
         }
-        if (this.style) this.style._cascade(this._classes, options);
+        this._classes = Object.keys(uniqueClasses);
+        this._classOptions = options;
+
+        if (this.style) this.style.updateClasses();
+        return this._update(true);
     },
 
     /**
-     * Check whether a style class is active
+     * Check whether a style class is active.
      *
      * @param {string} klass Name of style class
      * @returns {boolean}
      */
     hasClass: function(klass) {
-        return !!this._classes[klass];
+        return this._classes.indexOf(klass) >= 0;
     },
 
     /**
-     * Return an array of the current active style classes
+     * Return an array of the current active style classes.
      *
      * @returns {boolean}
      */
     getClasses: function() {
-        return Object.keys(this._classes);
+        return this._classes;
     },
 
     /**
-     * Detect the map's new width and height and resize it.
+     * Detect the map's new width and height and resize it. Given
+     * the `container` of the map specified in the Map constructor,
+     * this reads the new width from the DOM: so this method is often
+     * called after the map's container is resized by another script
+     * or the map is shown after being initially hidden with CSS.
      *
      * @returns {Map} `this`
      */
@@ -310,48 +330,52 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
 
     },
     /**
-     * Set the map's minimum zoom level, and zooms map to that level if it is currently below it. If no parameter provided, unsets the current minimum zoom (sets it to 0)
-     * @param {zoom} any number between 0 and 20
-     * @returns {Map} `this`
+     * Set the map's minimum zoom level, and zooms map to that level if it is
+     * currently below it. If no parameter provided, unsets the current
+     * minimum zoom (sets it to 0)
+     *
+     * @param {number} minZoom Minimum zoom level. Must be between 0 and 20.
+     * @returns {Map} `this
      */
     setMinZoom: function(minZoom) {
 
         minZoom = minZoom === null || minZoom === undefined ? defaultMinZoom : minZoom;
 
-        if (minZoom >= defaultMinZoom && minZoom <= this.options.maxZoom) {
+        if (minZoom >= defaultMinZoom && minZoom <= this.transform.maxZoom) {
             this.transform.minZoom = minZoom;
             this._update();
 
             if (this.getZoom() < minZoom) this.setZoom(minZoom);
 
             return this;
-        }
 
-        else throw new Error('minZoom must be between ' + defaultMinZoom + ' and the current maxZoom, inclusive');
+        } else throw new Error('minZoom must be between ' + defaultMinZoom + ' and the current maxZoom, inclusive');
     },
 
     /**
-     * Set the map's maximum zoom level, and zooms map to that level if it is currently above it. If no parameter provided, unsets the current maximum zoom (sets it to 20)
-     * @param {zoom} any number between 0 and 20
+     * Set the map's maximum zoom level, and zooms map to that level if it is
+     * currently above it. If no parameter provided, unsets the current
+     * maximum zoom (sets it to 20)
+     * @param {number} maxZoom Maximum zoom level. Must be between 0 and 20.
      * @returns {Map} `this`
      */
     setMaxZoom: function(maxZoom) {
 
         maxZoom = maxZoom === null || maxZoom === undefined ? defaultMaxZoom : maxZoom;
 
-        if (maxZoom >= this.options.minZoom && maxZoom <= defaultMaxZoom) {
+        if (maxZoom >= this.transform.minZoom && maxZoom <= defaultMaxZoom) {
             this.transform.maxZoom = maxZoom;
             this._update();
 
             if (this.getZoom() > maxZoom) this.setZoom(maxZoom);
 
             return this;
-        }
 
-        else throw new Error('maxZoom must be between the current minZoom and ' + defaultMaxZoom + ', inclusive');
+        } else throw new Error('maxZoom must be between the current minZoom and ' + defaultMaxZoom + ', inclusive');
     },
     /**
-     * Get pixel coordinates (relative to map container) given a geographical location
+     * Get pixel coordinates relative to the map container, given a geographical
+     * location.
      *
      * @param {LngLat} lnglat
      * @returns {Object} `x` and `y` coordinates
@@ -361,7 +385,7 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
     },
 
     /**
-     * Get geographical coordinates given pixel coordinates
+     * Get geographical coordinates, given pixel coordinates.
      *
      * @param {Array<number>} point [x, y] pixel coordinates
      * @returns {LngLat}
@@ -371,102 +395,86 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
     },
 
     /**
-     * Query features at a point, or within a certain radius thereof.
+     * Query rendered features within a point or rectangle.
      *
-     * To use this method, you must set the style property `"interactive": true` on layers you wish to query.
-     *
-     * @param {Array<number>} point [x, y] pixel coordinates
+     * @param {Point|Array<number>|Array<Point>|Array<Array<number>>} [pointOrBox] Either [x, y] pixel coordinates of a point, or [[x1, y1], [x2, y2]] pixel coordinates of opposite corners of bounding rectangle. Optional: use entire viewport if omitted.
      * @param {Object} params
-     * @param {number} [params.radius=0] Radius in pixels to search in
-     * @param {string|Array<string>} [params.layer] Only return features from a given layer or layers
-     * @param {string} [params.type] Either `raster` or `vector`
-     * @param {boolean} [params.includeGeometry=false] If `true`, geometry of features will be included in the results at the expense of a much slower query time.
-     * @param {featuresCallback} callback function that receives the results
+     * @param {Array<string>} [params.layers] Only query features from layers with these layer IDs.
+     * @param {Array} [params.filter] A mapbox-gl-style-spec filter.
      *
-     * @returns {Map} `this`
+     * @returns {Array<Object>} features - An array of [GeoJSON](http://geojson.org/) features
+     * matching the query parameters. The GeoJSON properties of each feature are taken from
+     * the original source. Each feature object also contains a top-level `layer`
+     * property whose value is an object representing the style layer to which the
+     * feature belongs. Layout and paint properties in this object contain values
+     * which are fully evaluated for the given zoom level and feature.
      *
      * @example
-     * map.featuresAt([10, 20], { radius: 10 }, function(err, features) {
-     *   console.log(features);
-     * });
+     * var features = map.queryRenderedFeatures([20, 35], { layers: ['my-layer-name'] });
+     *
+     * @example
+     * var features = map.queryRenderedFeatures([[10, 20], [30, 50]], { layers: ['my-layer-name'] });
      */
-    featuresAt: function(point, params, callback) {
-        var location = this.unproject(point).wrap();
-        var coord = this.transform.locationCoordinate(location);
-        this.style.featuresAt(coord, params, callback);
-        return this;
+    queryRenderedFeatures: function(pointOrBox, params) {
+        if (!(pointOrBox instanceof Point || Array.isArray(pointOrBox))) {
+            params = pointOrBox;
+            pointOrBox = undefined;
+        }
+        var queryGeometry = this._makeQueryGeometry(pointOrBox);
+        return this.style.queryRenderedFeatures(queryGeometry, params, this.transform.zoom, this.transform.angle);
     },
 
-    /**
-     * Query features within a rectangle.
-     *
-     * To use this method, you must set the style property `"interactive": true` on layers you wish to query.
-     *
-     * @param {Array<Point>|Array<Array<number>>} [bounds] Coordinates of opposite corners of bounding rectangle, in pixel coordinates. Optional: use entire viewport if omitted.
-     * @param {Object} params
-     * @param {string|Array<string>} [params.layer] Only return features from a given layer or layers
-     * @param {string} [params.type] Either `raster` or `vector`
-     * @param {boolean} [params.includeGeometry=false] If `true`, geometry of features will be included in the results at the expense of a much slower query time.
-     * @param {featuresCallback} callback function that receives the results
-     *
-     * @returns {Map} `this`
-     *
-     * @example
-     * map.featuresIn([[10, 20], [30, 50]], { layer: 'my-layer-name' }, function(err, features) {
-     *   console.log(features);
-     * });
-     */
-    featuresIn: function(bounds, params, callback) {
-        if (typeof callback === 'undefined') {
-            callback = params;
-            params = bounds;
-          // bounds was omitted: use full viewport
-            bounds = [
+    _makeQueryGeometry: function(pointOrBox) {
+        if (pointOrBox === undefined) {
+            // bounds was omitted: use full viewport
+            pointOrBox = [
                 Point.convert([0, 0]),
                 Point.convert([this.transform.width, this.transform.height])
             ];
         }
-        bounds = bounds.map(Point.convert.bind(Point));
-        bounds = [
-            new Point(
-            Math.min(bounds[0].x, bounds[1].x),
-            Math.min(bounds[0].y, bounds[1].y)
-          ),
-            new Point(
-            Math.max(bounds[0].x, bounds[1].x),
-            Math.max(bounds[0].y, bounds[1].y)
-          )
-        ].map(this.transform.pointCoordinate.bind(this.transform));
-        this.style.featuresIn(bounds, params, callback);
-        return this;
+
+        var queryGeometry;
+        var isPoint = pointOrBox instanceof Point || typeof pointOrBox[0] === 'number';
+
+        if (isPoint) {
+            var point = Point.convert(pointOrBox);
+            queryGeometry = [point];
+        } else {
+            var box = [Point.convert(pointOrBox[0]), Point.convert(pointOrBox[1])];
+            queryGeometry = [
+                box[0],
+                new Point(box[1].x, box[0].y),
+                box[1],
+                new Point(box[0].x, box[1].y),
+                box[0]
+            ];
+        }
+
+        queryGeometry = queryGeometry.map(function(p) {
+            return this.transform.pointCoordinate(p);
+        }.bind(this));
+
+        return queryGeometry;
     },
 
     /**
-     * Apply multiple style mutations in a batch
+     * Get data from vector tiles as an array of GeoJSON Features.
      *
-     * @param {function} work Function which accepts a `StyleBatch` object,
-     *      a subset of `Map`, with `addLayer`, `removeLayer`,
-     *      `setPaintProperty`, `setLayoutProperty`, `setFilter`,
-     *      `setLayerZoomRange`, `addSource`, and `removeSource`
+     * @param {string} sourceID source ID
+     * @param {Object} params
+     * @param {string} [params.sourceLayer] The name of the vector tile layer to get features from.
+     * @param {Array} [params.filter] A mapbox-gl-style-spec filter.
      *
-     * @example
-     * map.batch(function (batch) {
-     *     batch.addLayer(layer1);
-     *     batch.addLayer(layer2);
-     *     ...
-     *     batch.addLayer(layerN);
-     * });
-     *
+     * @returns {Array<Object>} features - An array of [GeoJSON](http://geojson.org/) features matching the query parameters. The GeoJSON properties of each feature are taken from the original source. Each feature object also contains a top-level `layer` property whose value is an object representing the style layer to which the feature belongs. Layout and paint properties in this object contain values which are fully evaluated for the given zoom level and feature.
      */
-    batch: function(work) {
-        this.style.batch(work);
-
-        this.style._cascade(this._classes);
-        this._update(true);
+    querySourceFeatures: function(sourceID, params) {
+        return this.style.querySourceFeatures(sourceID, params);
     },
 
     /**
-     * Replaces the map's style object
+     * Replaces the map's style object with a new value. Unlike the `style`
+     * option in the Map constructor, this method only accepts an object
+     * of a new style, not a URL string.
      *
      * @param {Object} style A style object formatted as JSON
      * @returns {Map} `this`
@@ -530,7 +538,7 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
     },
 
     /**
-     * Get a style object that can be used to recreate the map's style
+     * Get a style object that can be used to recreate the map's style.
      *
      * @returns {Object} style
      */
@@ -549,6 +557,7 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
      */
     addSource: function(id, source) {
         this.style.addSource(id, source);
+        this._update(true);
         return this;
     },
 
@@ -561,6 +570,7 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
      */
     removeSource: function(id) {
         this.style.removeSource(id);
+        this._update(true);
         return this;
     },
 
@@ -584,7 +594,7 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
      */
     addLayer: function(layer, before) {
         this.style.addLayer(layer, before);
-        this.style._cascade(this._classes);
+        this._update(true);
         return this;
     },
 
@@ -599,7 +609,7 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
      */
     removeLayer: function(id) {
         this.style.removeLayer(id);
-        this.style._cascade(this._classes);
+        this._update(true);
         return this;
     },
 
@@ -619,9 +629,12 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
      * @param {string} layer ID of a layer
      * @param {Array} filter filter specification, as defined in the [Style Specification](https://www.mapbox.com/mapbox-gl-style-spec/#types-filter)
      * @returns {Map} `this`
+     * @example
+     * map.setFilter('my-layer', ['==', 'name', 'USA']);
      */
     setFilter: function(layer, filter) {
         this.style.setFilter(layer, filter);
+        this._update(true);
         return this;
     },
 
@@ -632,9 +645,12 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
      * @param {number} minzoom minimum zoom extent
      * @param {number} maxzoom maximum zoom extent
      * @returns {Map} `this`
+     * @example
+     * map.setLayerZoomRange('my-layer', 2, 5);
      */
     setLayerZoomRange: function(layerId, minzoom, maxzoom) {
         this.style.setLayerZoomRange(layerId, minzoom, maxzoom);
+        this._update(true);
         return this;
     },
 
@@ -656,12 +672,12 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
      * @param {*} value value for the paint propery; must have the type appropriate for the property as defined in the [Style Specification](https://www.mapbox.com/mapbox-gl-style-spec/)
      * @param {string=} klass optional class specifier for the property
      * @returns {Map} `this`
+     * @example
+     * map.setPaintProperty('my-layer', 'fill-color', '#faafee');
      */
     setPaintProperty: function(layer, name, value, klass) {
-        this.batch(function(batch) {
-            batch.setPaintProperty(layer, name, value, klass);
-        });
-
+        this.style.setPaintProperty(layer, name, value, klass);
+        this._update(true);
         return this;
     },
 
@@ -684,12 +700,12 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
      * @param {string} name name of a layout property
      * @param {*} value value for the layout propery; must have the type appropriate for the property as defined in the [Style Specification](https://www.mapbox.com/mapbox-gl-style-spec/)
      * @returns {Map} `this`
+     * @example
+     * map.setLayoutProperty('my-layer', 'visibility', 'none');
      */
     setLayoutProperty: function(layer, name, value) {
-        this.batch(function(batch) {
-            batch.setLayoutProperty(layer, name, value);
-        });
-
+        this.style.setLayoutProperty(layer, name, value);
+        this._update(true);
         return this;
     },
 
@@ -736,13 +752,11 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
     },
 
     _setupContainer: function() {
-        var id = this.options.container;
-
-        var container = this._container = typeof id === 'string' ? document.getElementById(id) : id;
+        var container = this._container;
         container.classList.add('mapboxgl-map');
 
         var canvasContainer = this._canvasContainer = DOM.create('div', 'mapboxgl-canvas-container', container);
-        if (this.options.interactive) {
+        if (this._interactive) {
             canvasContainer.classList.add('mapboxgl-interactive');
         }
         this._canvas = new Canvas(this, canvasContainer);
@@ -756,8 +770,8 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
 
     _setupPainter: function() {
         var gl = this._canvas.getWebGLContext({
-            failIfMajorPerformanceCaveat: this.options.failIfMajorPerformanceCaveat,
-            preserveDrawingBuffer: this.options.preserveDrawingBuffer
+            failIfMajorPerformanceCaveat: this._failIfMajorPerformanceCaveat,
+            preserveDrawingBuffer: this._preserveDrawingBuffer
         });
 
         if (!gl) {
@@ -843,6 +857,8 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
     _render: function() {
         if (this.style && this._styleDirty) {
             this._styleDirty = false;
+            this.style.update(this._classes, this._classOptions);
+            this._classOptions = null;
             this.style._recalculate(this.transform.zoom);
         }
 
@@ -852,7 +868,8 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
         }
 
         this.painter.render(this.style, {
-            debug: this.tileDebug,
+            debug: this.showTileBoundaries,
+            showOverdrawInspector: this._showOverdrawInspector,
             vertices: this.vertices,
             rotating: this.rotating,
             zooming: this.zooming
@@ -938,7 +955,7 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
         if (this.transform.unmodified) {
             this.jumpTo(this.style.stylesheet);
         }
-        this.style._cascade(this._classes, {transition: false});
+        this.style.update(this._classes, {transition: false});
         this._forwardStyleEvent(e);
     },
 
@@ -971,56 +988,55 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
     }
 });
 
-
-/**
- * Callback to receive results from `Map#featuresAt` and `Map#featuresIn`.
- *
- * Note: because features come from vector tiles or GeoJSON data that is converted to vector tiles internally, the returned features will be:
- *
- * 1. Truncated at tile boundaries.
- * 2. Duplicated across tile boundaries.
- *
- * For example, suppose there is a highway running through your rectangle in a `featuresIn` query. `featuresIn` will only give you the parts of the highway feature that lie within the map tiles covering your rectangle, even if the road actually extends into other tiles. Also, the portion of the highway within each map tile will come back as a separate feature.
- *
- * @callback featuresCallback
- * @param {?Error} err - An error that occurred during query processing, if any. If this parameter is non-null, the `features` parameter will be null.
- * @param {?Array<Object>} features - An array of [GeoJSON](http://geojson.org/) features matching the query parameters. The GeoJSON properties of each feature are taken from the original source. Each feature object also contains a top-level `layer` property whose value is an object representing the style layer to which the feature belongs. Layout and paint properties in this object contain values which are fully evaluated for the given zoom level and feature.
- */
-
-
 util.extendAll(Map.prototype, /** @lends Map.prototype */{
 
     /**
-     * Enable tile debugging mode
+     * Draw an outline around each rendered tile for debugging.
      *
-     * @name tileDebug
+     * @name showTileBoundaries
      * @type {boolean}
      */
-    _tileDebug: false,
-    get tileDebug() { return this._tileDebug; },
-    set tileDebug(value) {
-        if (this._tileDebug === value) return;
-        this._tileDebug = value;
+    _showTileBoundaries: false,
+    get showTileBoundaries() { return this._showTileBoundaries; },
+    set showTileBoundaries(value) {
+        if (this._showTileBoundaries === value) return;
+        this._showTileBoundaries = value;
         this._update();
     },
 
     /**
-     * Show collision boxes: useful for debugging label placement
-     * in styles.
+     * Draw boxes around all symbols in the data source, showing which were
+     * rendered and which were hidden due to collisions with other symbols for
+     * style debugging.
      *
-     * @name collisionDebug
+     * @name showCollisionBoxes
      * @type {boolean}
      */
-    _collisionDebug: false,
-    get collisionDebug() { return this._collisionDebug; },
-    set collisionDebug(value) {
-        if (this._collisionDebug === value) return;
-        this._collisionDebug = value;
+    _showCollisionBoxes: false,
+    get showCollisionBoxes() { return this._showCollisionBoxes; },
+    set showCollisionBoxes(value) {
+        if (this._showCollisionBoxes === value) return;
+        this._showCollisionBoxes = value;
         this.style._redoPlacement();
     },
 
+    /*
+     * Show how many times each fragment has been shaded. White fragments have
+     * been shaded 8 or more times. Black fragments have been shaded 0 times.
+     *
+     * @name showOverdraw
+     * @type {boolean}
+     */
+    _showOverdrawInspector: false,
+    get showOverdrawInspector() { return this._showOverdrawInspector; },
+    set showOverdrawInspector(value) {
+        if (this._showOverdrawInspector === value) return;
+        this._showOverdrawInspector = value;
+        this._update();
+    },
+
     /**
-     * Enable continuous repaint to analyze performance
+     * Enable continuous repaint to analyze performance.
      *
      * @name repaint
      * @type {boolean}
@@ -1040,3 +1056,24 @@ function removeNode(node) {
         node.parentNode.removeChild(node);
     }
 }
+
+/**
+ * Options common to Map#addClass, Map#removeClass, and Map#setClasses, controlling
+ * whether or not to smoothly transition property changes triggered by the class change.
+ *
+ * @typedef {Object} StyleOptions
+ * @property {boolean} transition
+ */
+
+ /**
+  * This event is fired whenever the map is drawn to the screen because of
+  *
+  *  - a change in map position, zoom, pitch, or bearing
+  *  - a change to the map style
+  *  - a change to a GeoJSON source
+  *  - a vector tile, GeoJSON file, glyph, or sprite being loaded
+  *
+  * @event render
+  * @memberof Map
+  * @instance
+  */

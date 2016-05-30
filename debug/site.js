@@ -1,7 +1,7 @@
 
 mapboxgl.accessToken = getAccessToken();
 
-var map = new mapboxgl.Map({
+var map = window.map = new mapboxgl.Map({
     container: 'map',
     zoom: 12.5,
     center: [-77.01866, 38.888],
@@ -10,6 +10,7 @@ var map = new mapboxgl.Map({
 });
 
 map.addControl(new mapboxgl.Navigation());
+map.addControl(new mapboxgl.Geolocate());
 
 map.on('load', function() {
     map.addSource('geojson', {
@@ -49,8 +50,24 @@ map.on('load', function() {
         "type": "circle",
         "source": "geojson-random-points",
         "paint": {
-            "circle-radius": 5,
-            "circle-color": "#f0f"
+            "circle-radius": {
+                property: "mapbox",
+                stops: [
+                    [{ zoom: 0, value: 0 }, 2],
+                    [{ zoom: 0, value: 100 }, 10],
+                    [{ zoom: 6, value: 0 }, 20],
+                    [{ zoom: 6, value: 100 }, 100]
+                ]
+            },
+            "circle-color": {
+                property: "mapbox",
+                stops: [
+                    [{ zoom: 0, value: 0 }, 'red'],
+                    [{ zoom: 0, value: 100 }, 'violet'],
+                    [{ zoom: 6, value: 0 }, 'blue'],
+                    [{ zoom: 6, value: 100 }, 'green']
+                ]
+            }
         }
     });
 
@@ -82,12 +99,16 @@ map.on('click', function(e) {
         .addTo(map);
 });
 
-document.getElementById('tile-debug-checkbox').onclick = function() {
-    map.tileDebug = !!this.checked;
+document.getElementById('show-tile-boundaries-checkbox').onclick = function() {
+    map.showTileBoundaries = !!this.checked;
 };
 
-document.getElementById('collision-debug-checkbox').onclick = function() {
-    map.collisionDebug = !!this.checked;
+document.getElementById('show-symbol-collision-boxes-checkbox').onclick = function() {
+    map.showCollisionBoxes = !!this.checked;
+};
+
+document.getElementById('show-overdraw-checkbox').onclick = function() {
+    map.showOverdrawInspector = !!this.checked;
 };
 
 document.getElementById('buffer-checkbox').onclick = function() {

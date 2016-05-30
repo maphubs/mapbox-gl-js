@@ -4,40 +4,30 @@ module.exports = drawCollisionDebug;
 
 function drawCollisionDebug(painter, source, layer, coords) {
     var gl = painter.gl;
-    var shader = painter.collisionBoxShader;
     gl.enable(gl.STENCIL_TEST);
-    gl.switchShader(shader);
+    var program = painter.useProgram('collisionbox');
 
     for (var i = 0; i < coords.length; i++) {
         var coord = coords[i];
         var tile = source.getTile(coord);
         var bucket = tile.getBucket(layer);
         if (!bucket) continue;
-        var elementGroups = bucket.elementGroups.collisionBox;
+        var bufferGroups = bucket.bufferGroups.collisionBox;
 
-        if (!elementGroups) continue;
-        if (!bucket.buffers) continue;
-        if (elementGroups[0].vertexLength === 0) continue;
+        if (!bufferGroups || !bufferGroups.length) continue;
+        var group = bufferGroups[0];
+        if (group.layout.vertex.length === 0) continue;
 
-        var buffer = bucket.buffers.collisionBoxVertex;
-        buffer.bind(gl);
-        buffer.setAttribPointers(gl, shader, 0);
-
-        var posMatrix = painter.calculatePosMatrix(coord, source.maxzoom);
-        gl.setPosMatrix(posMatrix);
+        gl.uniformMatrix4fv(program.u_matrix, false, coord.posMatrix);
 
         painter.enableTileClippingMask(coord);
 
-        gl.lineWidth(1);
-        gl.uniform1f(shader.u_scale, Math.pow(2, painter.transform.zoom - tile.coord.z));
-        gl.uniform1f(shader.u_zoom, painter.transform.zoom * 10);
-        gl.uniform1f(shader.u_maxzoom, (tile.coord.z + 1) * 10);
+        painter.lineWidth(1);
+        gl.uniform1f(program.u_scale, Math.pow(2, painter.transform.zoom - tile.coord.z));
+        gl.uniform1f(program.u_zoom, painter.transform.zoom * 10);
+        gl.uniform1f(program.u_maxzoom, (tile.coord.z + 1) * 10);
 
-        gl.drawArrays(
-            gl.LINES,
-            elementGroups[0].vertexStartIndex,
-            elementGroups[0].vertexLength
-        );
-
+        group.vaos[layer.id].bind(gl, program, group.layout.vertex);
+        gl.drawArrays(gl.LINES, 0, group.layout.vertex.length);
     }
 }

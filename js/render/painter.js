@@ -1,12 +1,16 @@
 'use strict';
 
-var glutil = require('./gl_util');
 var browser = require('../util/browser');
 var mat4 = require('gl-matrix').mat4;
 var FrameHistory = require('./frame_history');
-var TileCoord = require('../source/tile_coord');
 var TilePyramid = require('../source/tile_pyramid');
 var EXTENT = require('../data/bucket').EXTENT;
+var pixelsToTileUnits = require('../source/pixels_to_tile_units');
+var util = require('../util/util');
+var StructArrayType = require('../util/struct_array');
+var Buffer = require('../data/buffer');
+var VertexArrayObject = require('./vertex_array_object');
+var RasterBoundsArray = require('./draw_raster').RasterBoundsArray;
 
 module.exports = Painter;
 
@@ -14,9 +18,10 @@ module.exports = Painter;
  * Initialize a new painter object.
  *
  * @param {Canvas} gl an experimental-webgl drawing context
+ * @private
  */
 function Painter(gl, transform) {
-    this.gl = glutil.extend(gl);
+    this.gl = gl;
     this.transform = transform;
 
     this.reusableTextures = {};
@@ -30,7 +35,11 @@ function Painter(gl, transform) {
     // This is implemented using the WebGL depth buffer.
     this.numSublayers = TilePyramid.maxUnderzooming + TilePyramid.maxOverzooming + 1;
     this.depthEpsilon = 1 / Math.pow(2, 16);
+
+    this.lineWidthRange = gl.getParameter(gl.ALIASED_LINE_WIDTH_RANGE);
 }
+
+util.extend(Painter.prototype, require('./painter/use_program'));
 
 /*
  * Update the GL viewport, projection matrix, and transforms to compensate
@@ -44,7 +53,6 @@ Painter.prototype.resize = function(width, height) {
     gl.viewport(0, 0, this.width, this.height);
 
 };
-
 
 Painter.prototype.setup = function() {
     var gl = this.gl;
@@ -64,98 +72,35 @@ Painter.prototype.setup = function() {
     this._depthMask = false;
     gl.depthMask(false);
 
-    // Initialize shaders
-    this.debugShader = gl.initializeShader('debug',
-        ['a_pos'],
-        ['u_matrix', 'u_color']);
+    var PosArray = this.PosArray = new StructArrayType({
+        members: [{ name: 'a_pos', type: 'Int16', components: 2 }]
+    });
 
-    this.rasterShader = gl.initializeShader('raster',
-        ['a_pos', 'a_texture_pos'],
-        ['u_matrix', 'u_brightness_low', 'u_brightness_high', 'u_saturation_factor', 'u_spin_weights', 'u_contrast_factor', 'u_opacity0', 'u_opacity1', 'u_image0', 'u_image1', 'u_tl_parent', 'u_scale_parent', 'u_buffer_scale']);
+    var tileExtentArray = new PosArray();
+    tileExtentArray.emplaceBack(0, 0);
+    tileExtentArray.emplaceBack(EXTENT, 0);
+    tileExtentArray.emplaceBack(0, EXTENT);
+    tileExtentArray.emplaceBack(EXTENT, EXTENT);
+    this.tileExtentBuffer = new Buffer(tileExtentArray.serialize(), PosArray.serialize(), Buffer.BufferType.VERTEX);
+    this.tileExtentVAO = new VertexArrayObject();
+    this.tileExtentPatternVAO = new VertexArrayObject();
 
-    this.circleShader = gl.initializeShader('circle',
-        ['a_pos'],
-        ['u_matrix', 'u_exmatrix', 'u_blur', 'u_size', 'u_color']);
+    var debugArray = new PosArray();
+    debugArray.emplaceBack(0, 0);
+    debugArray.emplaceBack(EXTENT, 0);
+    debugArray.emplaceBack(EXTENT, EXTENT);
+    debugArray.emplaceBack(0, EXTENT);
+    debugArray.emplaceBack(0, 0);
+    this.debugBuffer = new Buffer(debugArray.serialize(), PosArray.serialize(), Buffer.BufferType.VERTEX);
+    this.debugVAO = new VertexArrayObject();
 
-    this.lineShader = gl.initializeShader('line',
-        ['a_pos', 'a_data'],
-        ['u_matrix', 'u_linewidth', 'u_color', 'u_ratio', 'u_blur', 'u_extra', 'u_antialiasingmatrix', 'u_offset', 'u_exmatrix']);
-
-    this.linepatternShader = gl.initializeShader('linepattern',
-        ['a_pos', 'a_data'],
-        ['u_matrix', 'u_linewidth', 'u_ratio', 'u_pattern_size_a', 'u_pattern_size_b', 'u_pattern_tl_a', 'u_pattern_br_a', 'u_pattern_tl_b', 'u_pattern_br_b', 'u_blur', 'u_fade', 'u_opacity', 'u_extra', 'u_antialiasingmatrix', 'u_offset']);
-
-    this.linesdfpatternShader = gl.initializeShader('linesdfpattern',
-        ['a_pos', 'a_data'],
-        ['u_matrix', 'u_linewidth', 'u_color', 'u_ratio', 'u_blur', 'u_patternscale_a', 'u_tex_y_a', 'u_patternscale_b', 'u_tex_y_b', 'u_image', 'u_sdfgamma', 'u_mix', 'u_extra', 'u_antialiasingmatrix', 'u_offset']);
-
-    this.sdfShader = gl.initializeShader('sdf',
-        ['a_pos', 'a_offset', 'a_data1', 'a_data2'],
-        ['u_matrix', 'u_exmatrix', 'u_texture', 'u_texsize', 'u_color', 'u_gamma', 'u_buffer', 'u_zoom', 'u_fadedist', 'u_minfadezoom', 'u_maxfadezoom', 'u_fadezoom', 'u_skewed', 'u_extra']);
-
-    this.iconShader = gl.initializeShader('icon',
-        ['a_pos', 'a_offset', 'a_data1', 'a_data2'],
-        ['u_matrix', 'u_exmatrix', 'u_texture', 'u_texsize', 'u_zoom', 'u_fadedist', 'u_minfadezoom', 'u_maxfadezoom', 'u_fadezoom', 'u_opacity', 'u_skewed', 'u_extra']);
-
-    this.outlineShader = gl.initializeShader('outline',
-        ['a_pos'],
-        ['u_matrix', 'u_color', 'u_world']
-    );
-
-    this.patternShader = gl.initializeShader('pattern',
-        ['a_pos'],
-        ['u_matrix', 'u_pattern_tl_a', 'u_pattern_br_a', 'u_pattern_tl_b', 'u_pattern_br_b', 'u_mix', 'u_patternscale_a', 'u_patternscale_b', 'u_opacity', 'u_image', 'u_offset_a', 'u_offset_b']
-    );
-
-    this.fillShader = gl.initializeShader('fill',
-        ['a_pos'],
-        ['u_matrix', 'u_color']
-    );
-
-    this.collisionBoxShader = gl.initializeShader('collisionbox',
-        ['a_pos', 'a_extrude', 'a_data'],
-        ['u_matrix', 'u_scale', 'u_zoom', 'u_maxzoom']
-    );
-
-    this.identityMatrix = mat4.create();
-
-    // The backgroundBuffer is used when drawing to the full *canvas*
-    this.backgroundBuffer = gl.createBuffer();
-    this.backgroundBuffer.itemSize = 2;
-    this.backgroundBuffer.itemCount = 4;
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.backgroundBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Int16Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-
-    // The tileExtentBuffer is used when drawing to a full *tile*
-    this.tileExtentBuffer = gl.createBuffer();
-    this.tileExtentBuffer.itemSize = 4;
-    this.tileExtentBuffer.itemCount = 4;
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.tileExtentBuffer);
-    gl.bufferData(
-        gl.ARRAY_BUFFER,
-        new Int16Array([
-            // tile coord x, tile coord y, texture coord x, texture coord y
-            0, 0, 0, 0,
-            EXTENT, 0, 32767, 0,
-            0, EXTENT, 0, 32767,
-            EXTENT, EXTENT,  32767, 32767
-        ]),
-        gl.STATIC_DRAW);
-
-    // The debugBuffer is used to draw tile outlines for debugging
-    this.debugBuffer = gl.createBuffer();
-    this.debugBuffer.itemSize = 2;
-    this.debugBuffer.itemCount = 5;
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.debugBuffer);
-    gl.bufferData(
-        gl.ARRAY_BUFFER,
-        new Int16Array([
-            0, 0, EXTENT, 0, EXTENT, EXTENT, 0, EXTENT, 0, 0]),
-        gl.STATIC_DRAW);
-
-    // The debugTextBuffer is used to draw tile IDs for debugging
-    this.debugTextBuffer = gl.createBuffer();
-    this.debugTextBuffer.itemSize = 2;
+    var rasterBoundsArray = new RasterBoundsArray();
+    rasterBoundsArray.emplaceBack(0, 0, 0, 0);
+    rasterBoundsArray.emplaceBack(EXTENT, 0, 32767, 0);
+    rasterBoundsArray.emplaceBack(0, EXTENT, 0, 32767);
+    rasterBoundsArray.emplaceBack(EXTENT, EXTENT, 32767, 32767);
+    this.rasterBoundsBuffer = new Buffer(rasterBoundsArray.serialize(), RasterBoundsArray.serialize(), Buffer.BufferType.VERTEX);
+    this.rasterBoundsVAO = new VertexArrayObject();
 };
 
 /*
@@ -185,7 +130,7 @@ Painter.prototype.clearDepth = function() {
     gl.clear(gl.DEPTH_BUFFER_BIT);
 };
 
-Painter.prototype._renderTileClippingMasks = function(coords, sourceMaxZoom) {
+Painter.prototype._renderTileClippingMasks = function(coords) {
     var gl = this.gl;
     gl.colorMask(false, false, false, false);
     this.depthMask(false);
@@ -205,12 +150,12 @@ Painter.prototype._renderTileClippingMasks = function(coords, sourceMaxZoom) {
 
         gl.stencilFunc(gl.ALWAYS, id, 0xF8);
 
-        gl.switchShader(this.fillShader, this.calculatePosMatrix(coord, sourceMaxZoom));
+        var program = this.useProgram('fill');
+        gl.uniformMatrix4fv(program.u_matrix, false, coord.posMatrix);
 
         // Draw the clipping mask
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.tileExtentBuffer);
-        gl.vertexAttribPointer(this.fillShader.a_pos, this.tileExtentBuffer.itemSize, gl.SHORT, false, 8, 0);
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, this.tileExtentBuffer.itemCount);
+        this.tileExtentVAO.bind(gl, program, this.tileExtentBuffer);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, this.tileExtentBuffer.length);
     }
 
     gl.stencilMask(0x00);
@@ -259,6 +204,8 @@ Painter.prototype.render = function(style, options) {
     this.clearColor();
     this.clearDepth();
 
+    this.showOverdrawInspector(options.showOverdrawInspector);
+
     this.depthRange = (style._order.length + 2) * this.numSublayers * this.depthEpsilon;
 
     this.renderPass({isOpaquePass: true});
@@ -274,18 +221,24 @@ Painter.prototype.renderPass = function(options) {
         var group = groups[isOpaquePass ? groups.length - 1 - i : i];
         var source = this.style.sources[group.source];
 
+        var j;
         var coords = [];
         if (source) {
             coords = source.getVisibleCoordinates();
+            for (j = 0; j < coords.length; j++) {
+                coords[j].posMatrix = this.transform.calculatePosMatrix(coords[j], source.maxzoom);
+            }
             this.clearStencil();
             if (source.prepare) source.prepare();
             if (source.isTileClipped) {
-                this._renderTileClippingMasks(coords, source.maxzoom);
+                this._renderTileClippingMasks(coords);
             }
         }
 
         if (isOpaquePass) {
-            this.gl.disable(this.gl.BLEND);
+            if (!this._showOverdrawInspector) {
+                this.gl.disable(this.gl.BLEND);
+            }
             this.isOpaquePass = true;
         } else {
             this.gl.enable(this.gl.BLEND);
@@ -293,7 +246,7 @@ Painter.prototype.renderPass = function(options) {
             coords.reverse();
         }
 
-        for (var j = 0; j < group.length; j++) {
+        for (j = 0; j < group.length; j++) {
             var layer = group[isOpaquePass ? group.length - 1 - j : j];
             this.currentLayer += isOpaquePass ? -1 : 1;
             this.renderLayer(this, source, layer, coords);
@@ -315,23 +268,8 @@ Painter.prototype.depthMask = function(mask) {
 Painter.prototype.renderLayer = function(painter, source, layer, coords) {
     if (layer.isHidden(this.transform.zoom)) return;
     if (layer.type !== 'background' && !coords.length) return;
+    this.id = layer.id;
     draw[layer.type](painter, source, layer, coords);
-};
-
-// Draws non-opaque areas. This is for debugging purposes.
-Painter.prototype.drawStencilBuffer = function() {
-    var gl = this.gl;
-    gl.switchShader(this.fillShader, this.identityMatrix);
-
-    gl.stencilMask(0x00);
-    gl.stencilFunc(gl.EQUAL, 0x80, 0x80);
-
-    // Drw the filling quad where the stencil buffer isn't set.
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.backgroundBuffer);
-    gl.vertexAttribPointer(this.fillShader.a_pos, this.backgroundBuffer.itemSize, gl.SHORT, false, 0, 0);
-
-    gl.uniform4fv(this.fillShader.u_color, [0, 0, 0, 0.5]);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, this.tileExtentBuffer.itemCount);
 };
 
 Painter.prototype.setDepthSublayer = function(n) {
@@ -353,51 +291,14 @@ Painter.prototype.translatePosMatrix = function(matrix, tile, translate, anchor)
     }
 
     var translation = [
-        tile.pixelsToTileUnits(translate[0], this.transform.zoom),
-        tile.pixelsToTileUnits(translate[1], this.transform.zoom),
+        pixelsToTileUnits(tile, translate[0], this.transform.zoom),
+        pixelsToTileUnits(tile, translate[1], this.transform.zoom),
         0
     ];
 
     var translatedMatrix = new Float32Array(16);
     mat4.translate(translatedMatrix, matrix, translation);
     return translatedMatrix;
-};
-
-/**
- * Calculate the posMatrix that this tile uses to display itself in a map,
- * given a coordinate as (z, x, y) and a transform
- * @param {Object} transform
- * @private
- */
-Painter.prototype.calculatePosMatrix = function(coord, maxZoom) {
-
-    if (coord instanceof TileCoord) {
-        coord = coord.toCoordinate();
-    }
-    var transform = this.transform;
-
-    if (maxZoom === undefined) maxZoom = Infinity;
-
-    // Initialize model-view matrix that converts from the tile coordinates
-    // to screen coordinates.
-
-    // if z > maxzoom then the tile is actually a overscaled maxzoom tile,
-    // so calculate the matrix the maxzoom tile would use.
-    var z = Math.min(coord.zoom, maxZoom);
-    var x = coord.column;
-    var y = coord.row;
-
-    var scale = transform.worldSize / Math.pow(2, z);
-
-    // The position matrix
-    var posMatrix = new Float64Array(16);
-
-    mat4.identity(posMatrix);
-    mat4.translate(posMatrix, posMatrix, [x * scale, y * scale, 0]);
-    mat4.scale(posMatrix, posMatrix, [ scale / EXTENT, scale / EXTENT, 1 ]);
-    mat4.multiply(posMatrix, transform.projMatrix, posMatrix);
-
-    return new Float32Array(posMatrix);
 };
 
 Painter.prototype.saveTexture = function(texture) {
@@ -413,4 +314,25 @@ Painter.prototype.saveTexture = function(texture) {
 Painter.prototype.getTexture = function(size) {
     var textures = this.reusableTextures[size];
     return textures && textures.length > 0 ? textures.pop() : null;
+};
+
+Painter.prototype.lineWidth = function(width) {
+    this.gl.lineWidth(util.clamp(width, this.lineWidthRange[0], this.lineWidthRange[1]));
+};
+
+Painter.prototype.showOverdrawInspector = function(enabled) {
+    if (!enabled && !this._showOverdrawInspector) return;
+    this._showOverdrawInspector = enabled;
+
+    var gl = this.gl;
+    if (enabled) {
+        gl.blendFunc(gl.CONSTANT_COLOR, gl.ONE);
+        var numOverdrawSteps = 8;
+        var a = 1 / numOverdrawSteps;
+        gl.blendColor(a, a, a, 0);
+        gl.clearColor(0, 0, 0, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+    } else {
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    }
 };

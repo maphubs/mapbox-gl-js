@@ -1,6 +1,6 @@
 'use strict';
 
-var test = require('prova');
+var test = require('tap').test;
 var StyleLayer = require('../../../js/style/style_layer');
 var FillStyleLayer = require('../../../js/style/style_layer/fill_style_layer');
 var util = require('../../../js/util/util');
@@ -22,6 +22,81 @@ test('StyleLayer', function(t) {
         t.ok(layer instanceof FillStyleLayer);
         t.end();
     });
+
+    t.end();
+});
+
+test('StyleLayer#updatePaintTransition', function (t) {
+
+    t.test('updates paint transition', function(t) {
+        var layer = StyleLayer.create({
+            "id": "background",
+            "type": "background",
+            "paint": {
+                "background-color": "red"
+            }
+        });
+        layer.updatePaintTransition('background-color', [], {});
+        t.deepEqual(layer.getPaintValue('background-color'), [1, 0, 0, 1]);
+        t.end();
+    });
+
+    t.test('updates paint transition with class', function(t) {
+        var layer = StyleLayer.create({
+            "id": "background",
+            "type": "background",
+            "paint": {
+                "background-color": "red"
+            },
+            "paint.mapbox": {
+                "background-color": "blue"
+            }
+        });
+        layer.updatePaintTransition('background-color', ['mapbox'], {});
+        t.deepEqual(layer.getPaintValue('background-color'), [0, 0, 1, 1]);
+        t.end();
+    });
+
+    t.test('updates paint transition with extraneous class', function(t) {
+        var layer = StyleLayer.create({
+            "id": "background",
+            "type": "background",
+            "paint": {
+                "background-color": "red"
+            }
+        });
+        layer.updatePaintTransition('background-color', ['mapbox'], {});
+        t.deepEqual(layer.getPaintValue('background-color'), [1, 0, 0, 1]);
+        t.end();
+    });
+
+    t.end();
+});
+
+test('StyleLayer#updatePaintTransitions', function (t) {
+    t.test('respects classes regardless of layer properties order', function (t) {
+        var layer = StyleLayer.create({
+            "id": "background",
+            "type": "fill",
+            "paint.blue": {
+                "fill-color": "#8ccbf7",
+                "fill-opacity": 1
+            },
+            "paint": {
+                "fill-opacity": 0
+            }
+        });
+
+        layer.updatePaintTransitions([], {transition: false}, null, createAnimationLoop());
+        t.equal(layer.getPaintValue('fill-opacity'), 0);
+
+        layer.updatePaintTransitions(['blue'], {transition: false}, null, createAnimationLoop());
+        t.equal(layer.getPaintValue('fill-opacity'), 1);
+
+        t.end();
+    });
+
+    t.end();
 });
 
 test('StyleLayer#setPaintProperty', function(t) {
@@ -61,9 +136,9 @@ test('StyleLayer#setPaintProperty', function(t) {
                 "background-opacity": 1
             }
         });
-        layer.cascade({}, {transition: false}, null, createAnimationLoop());
+        layer.updatePaintTransitions([], {transition: false}, null, createAnimationLoop());
         layer.setPaintProperty('background-color', null);
-        layer.cascade({}, {transition: false}, null, createAnimationLoop());
+        layer.updatePaintTransitions([], {transition: false}, null, createAnimationLoop());
 
         t.deepEqual(layer.getPaintValue('background-color'), [0, 0, 0, 1]);
         t.equal(layer.getPaintProperty('background-color'), undefined);
@@ -101,12 +176,12 @@ test('StyleLayer#setPaintProperty', function(t) {
                 "background-opacity": 0.1
             }
         });
-        layer.cascade({night: true}, {transition: false}, null, createAnimationLoop());
+        layer.updatePaintTransitions(['night'], {transition: false}, null, createAnimationLoop());
         t.deepEqual(layer.getPaintProperty('background-color', 'night'), 'blue');
         t.deepEqual(layer.getPaintValue('background-color'), [0, 0, 1, 1]);
 
         layer.setPaintProperty('background-color', null, 'night');
-        layer.cascade({night: true}, {transition: false}, null, createAnimationLoop());
+        layer.updatePaintTransitions(['night'], {transition: false}, null, createAnimationLoop());
         t.deepEqual(layer.getPaintValue('background-color'), [1, 0, 0, 1]);
         t.equal(layer.getPaintProperty('background-color', 'night'), undefined);
 
@@ -156,7 +231,7 @@ test('StyleLayer#setPaintProperty', function(t) {
         });
 
         layer.setPaintProperty('background-color-transition', {duration: 400}, 'background-color');
-        layer.cascade({}, {transition: false}, null, createAnimationLoop());
+        layer.updatePaintTransitions([], {transition: false}, null, createAnimationLoop());
         t.deepEqual(layer.getPaintProperty('background-color-transition', 'background-color'), {duration: 400});
         t.end();
     });
@@ -190,6 +265,8 @@ test('StyleLayer#setPaintProperty', function(t) {
             duration: -10
         });
     });
+
+    t.end();
 });
 
 test('StyleLayer#setLayoutProperty', function(t) {
@@ -248,6 +325,8 @@ test('StyleLayer#setLayoutProperty', function(t) {
         t.equal(layer.getLayoutProperty('text-transform'), undefined);
         t.end();
     });
+
+    t.end();
 });
 
 test('StyleLayer#serialize', function(t) {
@@ -358,6 +437,8 @@ test('StyleLayer#serialize', function(t) {
 
         t.end();
     });
+
+    t.end();
 });
 
 test('StyleLayer#serialize', function(t) {
@@ -454,6 +535,8 @@ test('StyleLayer#serialize', function(t) {
 
         t.end();
     });
+
+    t.end();
 });
 
 function createAnimationLoop() {

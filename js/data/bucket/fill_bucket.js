@@ -12,20 +12,17 @@ function FillBucket() {
 
 FillBucket.prototype = util.inherit(Bucket, {});
 
-FillBucket.prototype.shaderInterfaces = {
+FillBucket.prototype.programInterfaces = {
     fill: {
         vertexBuffer: true,
         elementBuffer: true,
-        secondElementBuffer: true,
-        secondElementBufferComponents: 2,
+        elementBuffer2: true,
+        elementBuffer2Components: 2,
 
-        attributeArgs: ['x', 'y'],
-
-        attributes: [{
-            name: 'pos',
+        layoutAttributes: [{
+            name: 'a_pos',
             components: 2,
-            type: Bucket.AttributeType.SHORT,
-            value: ['x', 'y']
+            type: 'Int16'
         }]
     }
 };
@@ -60,19 +57,16 @@ FillBucket.prototype.addFill = function(vertices) {
     for (var i = 0; i < vertices.length; i++) {
         var currentVertex = vertices[i];
 
-        var currentIndex = this.addFillVertex(currentVertex.x, currentVertex.y) - group.vertexStartIndex;
-        group.vertexLength++;
+        var currentIndex = group.layout.vertex.emplaceBack(currentVertex.x, currentVertex.y);
         if (i === 0) firstIndex = currentIndex;
 
         // Only add triangles that have distinct vertices.
         if (i >= 2 && (currentVertex.x !== vertices[0].x || currentVertex.y !== vertices[0].y)) {
-            this.addFillElement(firstIndex, prevIndex, currentIndex);
-            group.elementLength++;
+            group.layout.element.emplaceBack(firstIndex, prevIndex, currentIndex);
         }
 
         if (i >= 1) {
-            this.addFillSecondElement(prevIndex, currentIndex);
-            group.secondElementLength++;
+            group.layout.element2.emplaceBack(prevIndex, currentIndex);
         }
 
         prevIndex = currentIndex;

@@ -1,6 +1,8 @@
 'use strict';
 
-module.exports = CollisionBox;
+var StructArrayType = require('../util/struct_array');
+var util = require('../util/util');
+var Point = require('point-geometry');
 
 /**
  * A collision box represents an area of the map that that is covered by a
@@ -34,32 +36,44 @@ module.exports = CollisionBox;
  * label anymore. Their maxScale is smaller than the current scale.
  *
  *
- * @class CollisionBox
- * @param {Point} anchorPoint The anchor point the box is centered around.
- * @param {number} x1 The distance from the anchor to the left edge.
- * @param {number} y1 The distance from the anchor to the top edge.
- * @param {number} x2 The distance from the anchor to the right edge.
- * @param {number} y2 The distance from the anchor to the bottom edge.
- * @param {number} maxScale The maximum scale this box can block other boxes at.
+ * @class CollisionBoxArray
  * @private
  */
-function CollisionBox(anchorPoint, x1, y1, x2, y2, maxScale) {
-    // the box is centered around the anchor point
-    this.anchorPoint = anchorPoint;
 
-    // distances to the edges from the anchor
-    this.x1 = x1;
-    this.y1 = y1;
-    this.x2 = x2;
-    this.y2 = y2;
+var CollisionBoxArray = module.exports = new StructArrayType({
+    members: [
+        // the box is centered around the anchor point
+        { type: 'Int16', name: 'anchorPointX' },
+        { type: 'Int16', name: 'anchorPointY' },
 
-    // the box is only valid for scales < maxScale.
-    // The box does not block other boxes at scales >= maxScale;
-    this.maxScale = maxScale;
+        // distances to the edges from the anchor
+        { type: 'Int16', name: 'x1' },
+        { type: 'Int16', name: 'y1' },
+        { type: 'Int16', name: 'x2' },
+        { type: 'Int16', name: 'y2' },
 
-    // the scale at which the label can first be shown
-    this.placementScale = 0;
+        // the box is only valid for scales < maxScale.
+        // The box does not block other boxes at scales >= maxScale;
+        { type: 'Float32', name: 'maxScale' },
 
-    // rotated and scaled bbox used for indexing
-    this[0] = this[1] = this[2] = this[3] = 0;
-}
+        // the index of the feature in the original vectortile
+        { type: 'Uint32', name: 'featureIndex' },
+        // the source layer the feature appears in
+        { type: 'Uint16', name: 'sourceLayerIndex' },
+        // the bucket the feature appears in
+        { type: 'Uint16', name: 'bucketIndex' },
+
+        // rotated and scaled bbox used for indexing
+        { type: 'Int16', name: 'bbox0' },
+        { type: 'Int16', name: 'bbox1' },
+        { type: 'Int16', name: 'bbox2' },
+        { type: 'Int16', name: 'bbox3' },
+
+        { type: 'Float32', name: 'placementScale' }
+    ]});
+
+util.extendAll(CollisionBoxArray.prototype.StructType.prototype, {
+    get anchorPoint() {
+        return new Point(this.anchorPointX, this.anchorPointY);
+    }
+});

@@ -3,6 +3,7 @@
 var browser = require('../util/browser');
 var mat2 = require('gl-matrix').mat2;
 var util = require('../util/util');
+var pixelsToTileUnits = require('../source/pixels_to_tile_units');
 
 /**
  * Draw a line. Under the hood this will read elements from
@@ -18,12 +19,6 @@ module.exports = function drawLine(painter, source, layer, coords) {
     if (painter.isOpaquePass) return;
     painter.setDepthSublayer(0);
     painter.depthMask(false);
-
-    var hasData = coords.some(function(coord) {
-        var bucket = source.getTile(coord).getBucket(layer);
-        return bucket && bucket.elementGroups.line;
-    });
-    if (!hasData) return;
 
     var gl = painter.gl;
     gl.enable(gl.STENCIL_TEST);
@@ -50,7 +45,7 @@ module.exports = function drawLine(painter, source, layer, coords) {
     }
 
     var outset = offset + edgeWidth + antialiasing / 2 + shift;
-    var color = util.premultiply(layer.paint['line-color'], layer.paint['line-opacity']);
+    var color = util.premultiply(layer.paint['line-color']);
 
     var tr = painter.transform;
 
@@ -66,62 +61,63 @@ module.exports = function drawLine(painter, source, layer, coords) {
 
     var dasharray = layer.paint['line-dasharray'];
     var image = layer.paint['line-pattern'];
-    var shader, posA, posB, imagePosA, imagePosB;
+    var program, posA, posB, imagePosA, imagePosB;
 
     if (dasharray) {
-        shader = painter.linesdfpatternShader;
-        gl.switchShader(shader);
+        program = painter.useProgram('linesdfpattern');
 
-        gl.uniform2fv(shader.u_linewidth, [ outset, inset ]);
-        gl.uniform1f(shader.u_blur, blur);
-        gl.uniform4fv(shader.u_color, color);
+        gl.uniform2fv(program.u_linewidth, [ outset, inset ]);
+        gl.uniform1f(program.u_blur, blur);
+        gl.uniform4fv(program.u_color, color);
+        gl.uniform1f(program.u_opacity, layer.paint['line-opacity']);
 
         posA = painter.lineAtlas.getDash(dasharray.from, layer.layout['line-cap'] === 'round');
         posB = painter.lineAtlas.getDash(dasharray.to, layer.layout['line-cap'] === 'round');
+
+        gl.uniform1i(program.u_image, 0);
+        gl.activeTexture(gl.TEXTURE0);
         painter.lineAtlas.bind(gl);
 
-        gl.uniform1f(shader.u_tex_y_a, posA.y);
-        gl.uniform1f(shader.u_tex_y_b, posB.y);
-        gl.uniform1i(shader.u_image, 0);
-        gl.uniform1f(shader.u_mix, dasharray.t);
-
-        gl.uniform1f(shader.u_extra, extra);
-        gl.uniform1f(shader.u_offset, -layer.paint['line-offset']);
-        gl.uniformMatrix2fv(shader.u_antialiasingmatrix, false, antialiasingMatrix);
+        gl.uniform1f(program.u_tex_y_a, posA.y);
+        gl.uniform1f(program.u_tex_y_b, posB.y);
+        gl.uniform1f(program.u_mix, dasharray.t);
+        gl.uniform1f(program.u_extra, extra);
+        gl.uniform1f(program.u_offset, -layer.paint['line-offset']);
+        gl.uniformMatrix2fv(program.u_antialiasingmatrix, false, antialiasingMatrix);
 
     } else if (image) {
         imagePosA = painter.spriteAtlas.getPosition(image.from, true);
         imagePosB = painter.spriteAtlas.getPosition(image.to, true);
         if (!imagePosA || !imagePosB) return;
 
+        program = painter.useProgram('linepattern');
+
+        gl.uniform1i(program.u_image, 0);
+        gl.activeTexture(gl.TEXTURE0);
         painter.spriteAtlas.bind(gl, true);
 
-        shader = painter.linepatternShader;
-        gl.switchShader(shader);
-
-        gl.uniform2fv(shader.u_linewidth, [ outset, inset ]);
-        gl.uniform1f(shader.u_blur, blur);
-        gl.uniform2fv(shader.u_pattern_tl_a, imagePosA.tl);
-        gl.uniform2fv(shader.u_pattern_br_a, imagePosA.br);
-        gl.uniform2fv(shader.u_pattern_tl_b, imagePosB.tl);
-        gl.uniform2fv(shader.u_pattern_br_b, imagePosB.br);
-        gl.uniform1f(shader.u_fade, image.t);
-        gl.uniform1f(shader.u_opacity, layer.paint['line-opacity']);
-
-        gl.uniform1f(shader.u_extra, extra);
-        gl.uniform1f(shader.u_offset, -layer.paint['line-offset']);
-        gl.uniformMatrix2fv(shader.u_antialiasingmatrix, false, antialiasingMatrix);
+        gl.uniform2fv(program.u_linewidth, [ outset, inset ]);
+        gl.uniform1f(program.u_blur, blur);
+        gl.uniform2fv(program.u_pattern_tl_a, imagePosA.tl);
+        gl.uniform2fv(program.u_pattern_br_a, imagePosA.br);
+        gl.uniform2fv(program.u_pattern_tl_b, imagePosB.tl);
+        gl.uniform2fv(program.u_pattern_br_b, imagePosB.br);
+        gl.uniform1f(program.u_fade, image.t);
+        gl.uniform1f(program.u_opacity, layer.paint['line-opacity']);
+        gl.uniform1f(program.u_extra, extra);
+        gl.uniform1f(program.u_offset, -layer.paint['line-offset']);
+        gl.uniformMatrix2fv(program.u_antialiasingmatrix, false, antialiasingMatrix);
 
     } else {
-        shader = painter.lineShader;
-        gl.switchShader(shader);
+        program = painter.useProgram('line');
 
-        gl.uniform2fv(shader.u_linewidth, [ outset, inset ]);
-        gl.uniform1f(shader.u_blur, blur);
-        gl.uniform1f(shader.u_extra, extra);
-        gl.uniform1f(shader.u_offset, -layer.paint['line-offset']);
-        gl.uniformMatrix2fv(shader.u_antialiasingmatrix, false, antialiasingMatrix);
-        gl.uniform4fv(shader.u_color, color);
+        gl.uniform2fv(program.u_linewidth, [ outset, inset ]);
+        gl.uniform1f(program.u_blur, blur);
+        gl.uniform1f(program.u_extra, extra);
+        gl.uniform1f(program.u_offset, -layer.paint['line-offset']);
+        gl.uniformMatrix2fv(program.u_antialiasingmatrix, false, antialiasingMatrix);
+        gl.uniform4fv(program.u_color, color);
+        gl.uniform1f(program.u_opacity, layer.paint['line-opacity']);
     }
 
     for (var k = 0; k < coords.length; k++) {
@@ -129,58 +125,47 @@ module.exports = function drawLine(painter, source, layer, coords) {
         var tile = source.getTile(coord);
         var bucket = tile.getBucket(layer);
         if (!bucket) continue;
-        var elementGroups = bucket.elementGroups.line;
-        if (!elementGroups) continue;
+        var bufferGroups = bucket.bufferGroups.line;
+        if (!bufferGroups) continue;
 
         painter.enableTileClippingMask(coord);
 
         // set uniforms that are different for each tile
-        var posMatrix = painter.translatePosMatrix(painter.calculatePosMatrix(coord, source.maxzoom), tile, layer.paint['line-translate'], layer.paint['line-translate-anchor']);
+        var posMatrix = painter.translatePosMatrix(coord.posMatrix, tile, layer.paint['line-translate'], layer.paint['line-translate-anchor']);
+        gl.uniformMatrix4fv(program.u_matrix, false, posMatrix);
 
-        gl.setPosMatrix(posMatrix);
-        gl.setExMatrix(painter.transform.exMatrix);
-        var ratio = 1 / tile.pixelsToTileUnits(1, painter.transform.zoom);
+        var ratio = 1 / pixelsToTileUnits(tile, 1, painter.transform.zoom);
 
         if (dasharray) {
             var widthA = posA.width * dasharray.fromScale;
             var widthB = posB.width * dasharray.toScale;
-            var scaleA = [1 / tile.pixelsToTileUnits(widthA, painter.transform.tileZoom), -posA.height / 2];
-            var scaleB = [1 / tile.pixelsToTileUnits(widthB, painter.transform.tileZoom), -posB.height / 2];
+            var scaleA = [1 / pixelsToTileUnits(tile, widthA, painter.transform.tileZoom), -posA.height / 2];
+            var scaleB = [1 / pixelsToTileUnits(tile, widthB, painter.transform.tileZoom), -posB.height / 2];
             var gamma = painter.lineAtlas.width / (Math.min(widthA, widthB) * 256 * browser.devicePixelRatio) / 2;
-            gl.uniform1f(shader.u_ratio, ratio);
-            gl.uniform2fv(shader.u_patternscale_a, scaleA);
-            gl.uniform2fv(shader.u_patternscale_b, scaleB);
-            gl.uniform1f(shader.u_sdfgamma, gamma);
+            gl.uniform1f(program.u_ratio, ratio);
+            gl.uniform2fv(program.u_patternscale_a, scaleA);
+            gl.uniform2fv(program.u_patternscale_b, scaleB);
+            gl.uniform1f(program.u_sdfgamma, gamma);
 
         } else if (image) {
-            gl.uniform1f(shader.u_ratio, ratio);
-            gl.uniform2fv(shader.u_pattern_size_a, [
-                tile.pixelsToTileUnits(imagePosA.size[0] * image.fromScale, painter.transform.tileZoom),
+            gl.uniform1f(program.u_ratio, ratio);
+            gl.uniform2fv(program.u_pattern_size_a, [
+                pixelsToTileUnits(tile, imagePosA.size[0] * image.fromScale, painter.transform.tileZoom),
                 imagePosB.size[1]
             ]);
-            gl.uniform2fv(shader.u_pattern_size_b, [
-                tile.pixelsToTileUnits(imagePosB.size[0] * image.toScale, painter.transform.tileZoom),
+            gl.uniform2fv(program.u_pattern_size_b, [
+                pixelsToTileUnits(tile, imagePosB.size[0] * image.toScale, painter.transform.tileZoom),
                 imagePosB.size[1]
             ]);
 
         } else {
-            gl.uniform1f(shader.u_ratio, ratio);
+            gl.uniform1f(program.u_ratio, ratio);
         }
 
-        var vertex = bucket.buffers.lineVertex;
-        vertex.bind(gl);
-        var element = bucket.buffers.lineElement;
-        element.bind(gl);
-
-        for (var i = 0; i < elementGroups.length; i++) {
-            var group = elementGroups[i];
-            var vtxOffset = group.vertexStartIndex * vertex.itemSize;
-            gl.vertexAttribPointer(shader.a_pos, 2, gl.SHORT, false, 8, vtxOffset + 0);
-            gl.vertexAttribPointer(shader.a_data, 4, gl.UNSIGNED_BYTE, false, 8, vtxOffset + 4);
-
-            var count = group.elementLength * 3;
-            var elementOffset = group.elementStartIndex * element.itemSize;
-            gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_SHORT, elementOffset);
+        for (var i = 0; i < bufferGroups.length; i++) {
+            var group = bufferGroups[i];
+            group.vaos[layer.id].bind(gl, program, group.layout.vertex, group.layout.element);
+            gl.drawElements(gl.TRIANGLES, group.layout.element.length * 3, gl.UNSIGNED_SHORT, 0);
         }
     }
 

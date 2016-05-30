@@ -2,7 +2,7 @@
 
 /* jshint -W079 */
 
-var test = require('prova');
+var test = require('tap').test;
 var http = require('http');
 var Worker = require('../../../js/source/worker');
 
@@ -35,6 +35,8 @@ test('load tile', function(t) {
             t.end();
         });
     });
+
+    t.end();
 });
 
 test('abort tile', function(t) {
@@ -55,6 +57,56 @@ test('abort tile', function(t) {
         t.deepEqual(worker.loading, { source: {} });
         t.end();
     });
+
+    t.end();
+});
+
+test('set layers', function(t) {
+    var worker = new Worker(_self);
+
+    worker['set layers']([
+        { id: 'one', type: 'circle', paint: { 'circle-color': 'red' }  },
+        { id: 'two', type: 'circle', paint: { 'circle-color': 'green' }  },
+        { id: 'three', ref: 'two', type: 'circle', paint: { 'circle-color': 'blue' } }
+    ]);
+
+    t.equal(worker.layers.one.id, 'one');
+    t.equal(worker.layers.two.id, 'two');
+    t.equal(worker.layers.three.id, 'three');
+
+    t.equal(worker.layers.one.getPaintProperty('circle-color'), 'red');
+    t.equal(worker.layers.two.getPaintProperty('circle-color'), 'green');
+    t.equal(worker.layers.three.getPaintProperty('circle-color'), 'blue');
+
+    t.equal(worker.layerFamilies.one.length, 1);
+    t.equal(worker.layerFamilies.one[0].id, 'one');
+    t.equal(worker.layerFamilies.two.length, 2);
+    t.equal(worker.layerFamilies.two[0].id, 'two');
+    t.equal(worker.layerFamilies.two[1].id, 'three');
+
+    t.end();
+});
+
+test('update layers', function(t) {
+    var worker = new Worker(_self);
+
+    worker['set layers']([
+        { id: 'one', type: 'circle', paint: { 'circle-color': 'red' }  },
+        { id: 'two', type: 'circle', paint: { 'circle-color': 'green' }  },
+        { id: 'three', ref: 'two', type: 'circle', paint: { 'circle-color': 'blue' } }
+    ]);
+
+    worker['update layers']({
+        one: { id: 'one', type: 'circle', paint: { 'circle-color': 'cyan' }  },
+        two: { id: 'two', type: 'circle', paint: { 'circle-color': 'magenta' }  },
+        three: { id: 'three', ref: 'two', type: 'circle', paint: { 'circle-color': 'yellow' } }
+    });
+
+    t.equal(worker.layers.one.getPaintProperty('circle-color'), 'cyan');
+    t.equal(worker.layers.two.getPaintProperty('circle-color'), 'magenta');
+    t.equal(worker.layers.three.getPaintProperty('circle-color'), 'yellow');
+
+    t.end();
 });
 
 test('remove tile', function(t) {
@@ -75,6 +127,8 @@ test('remove tile', function(t) {
         t.deepEqual(worker.loaded, { source: {} });
         t.end();
     });
+
+    t.end();
 });
 
 test('after', function(t) {

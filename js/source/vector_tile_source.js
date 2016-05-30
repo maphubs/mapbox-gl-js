@@ -53,8 +53,8 @@ VectorTileSource.prototype = util.inherit(Evented, {
     getVisibleCoordinates: Source._getVisibleCoordinates,
     getTile: Source._getTile,
 
-    featuresAt: Source._vectorFeaturesAt,
-    featuresIn: Source._vectorFeaturesIn,
+    queryRenderedFeatures: Source._queryRenderedVectorFeatures,
+    querySourceFeatures: Source._querySourceFeatures,
 
     _loadTile: function(tile) {
         var overscaling = tile.coord.z > this.maxzoom ? Math.pow(2, tile.coord.z - this.maxzoom) : 1;
@@ -68,10 +68,11 @@ VectorTileSource.prototype = util.inherit(Evented, {
             overscaling: overscaling,
             angle: this.map.transform.angle,
             pitch: this.map.transform.pitch,
-            collisionDebug: this.map.collisionDebug
+            showCollisionBoxes: this.map.showCollisionBoxes
         };
 
         if (tile.workerID) {
+            params.rawTileData = tile.rawTileData;
             this.dispatcher.send('reload tile', params, this._tileLoaded.bind(this, tile), tile.workerID);
         } else {
             tile.workerID = this.dispatcher.send('load tile', params, this._tileLoaded.bind(this, tile));
@@ -88,7 +89,7 @@ VectorTileSource.prototype = util.inherit(Evented, {
             return;
         }
 
-        tile.loadVectorData(data);
+        tile.loadVectorData(data, this.map.style);
 
         if (tile.redoWhenDone) {
             tile.redoWhenDone = false;

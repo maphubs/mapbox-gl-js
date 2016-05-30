@@ -1,153 +1,218 @@
-## master
+## 0.18.0 (April 13 2016)
 
 #### New Features & Improvements
 
-Improve overall rendering performance. (#2221)
-Improve performance of `GeoJSONSource#setData`. (#2222)
-Add `Map#setMaxBounds` method (#2234)
-Add `isActive` and `isEnabled` methods to interaction handlers (#2238)
-Add `Map#setZoomBounds` method (#2243)
-Add touch events (#2195)
+* Implement zoom-and-property functions for `circle-color` and `circle-size` #2454
+* Dedupe attributions that are substrings of others #2453
+* Misc performance improvements #2483 #2488
 
 #### Bugfixes
 
-Fix calls to `setFilter`, `setLayoutProperty`, and `setLayerZoomRange` on ref children (#2228)
-Fix `undefined` bucket errors after `setFilter` calls (#2244)
-Fix bugs causing hidden symbols to be rendered (#2246, #2276)
-Fix raster flickering (#2236)
+* Fix errors when unsetting and resetting a style property #2464
+* Fix errors when updating paint properties while using classes #2496
+* Fix errors caused by race condition in unserializeBuckets #2497
+* Fix overzoomed tiles in wrapped worlds #2482
+* Fix errors caused by mutating a filter object after calling `Map#setFilter` #2495
+
+## 0.17.0 (April 13 2016)
+
+#### Breaking Changes
+
+* Remove `map.batch` in favor of automatically batching style mutations (i.e. calls to `Map#setLayoutProperty`, `Map#setPaintProperty`, `Map#setFilter`, `Map#setClasses`, etc.) and applying them once per frame, significantly improving performance when updating the style frequently #2355 #2380
+* Remove `util.throttle` #2345
+
+#### New Features & Improvements
+
+* Improve performance of all style mutation methods by only recalculating affected properties #2339
+* Improve fading of labels and icons #2376
+* Improve rendering performance by reducing work done on the main thread #2394
+* Validate filters passed to `Map#queryRenderedFeatures` and `Map#querySourceFeatures` #2349
+* Display a warning if a vector tile's geometry extent is larger than supported  #2383
+* Implement property functions (i.e. data-driven styling) for `circle-color` and `circle-size` #1932
+* Add `Popup#setDOMContent` method #2436
+
+#### Bugfixes
+
+* Fix a performance regression caused by using 1 `WebWorker` instead of `# cpus - 1` `WebWorker`s, slowing down tile loading times #2408
+* Fix a bug in which `Map#queryRenderedFeatures` would sometimes return features that had been removed #2353
+* Fix `clusterMaxZoom` option on `GeoJSONSource` not working as expected #2374
+* Fix anti-aliased rendering for pattern fills #2372
+* Fix exception caused by calling `Map#queryRenderedFeatures` or `Map#querySourceFeatures` with no arguments
+* Fix exception caused by calling `Map#setLayoutProperty` for `text-field` or `icon-image` #2407
+
+## 0.16.0 (March 24 2016)
+
+#### Breaking Changes
+
+* Replace `Map#featuresAt` and `Map#featuresIn` with `Map#queryRenderedFeatures` and `map.querySourceFeatures` (#2224)
+    * Replace `featuresAt` and `featuresIn` with `queryRenderedFeatures`
+    * Make `queryRenderedFeatures` synchronous, remove the callback and use the return value.
+    * Rename `layer` parameter to `layers` and make it an array of layer names.
+    * Remove the `radius` parameter. `radius` was used with `featuresAt` to account for style properties like `line-width` and `circle-radius`. `queryRenderedFeatures` accounts for these style properties. If you need to query a larger area, use a bounding box query instead of a point query.
+    * Remove the `includeGeometry` parameter because `queryRenderedFeatures` always includes geometries.
+* `Map#debug` is renamed to `Map#showTileBoundaries` (#2284)
+* `Map#collisionDebug` is renamed to `Map#showCollisionBoxes` (#2284)
+
+#### New Features & Improvements
+
+* Improve overall rendering performance. (#2221)
+* Improve performance of `GeoJSONSource#setData`. (#2222)
+* Add `Map#setMaxBounds` method (#2234)
+* Add `isActive` and `isEnabled` methods to interaction handlers (#2238)
+* Add `Map#setZoomBounds` method (#2243)
+* Add touch events (#2195)
+* Add `map.queryRenderedFeatures` to query the styled and rendered representations of features (#2224)
+* Add `map.querySourceFeatures` to get features directly from vector tiles, independent of the style (#2224)
+* Add `mapboxgl.Geolocate` control (#1939)
+* Make background patterns render seamlessly across tile boundaries (#2305)
+
+#### Bugfixes
+
+* Fix calls to `setFilter`, `setLayoutProperty`, and `setLayerZoomRange` on ref children (#2228)
+* Fix `undefined` bucket errors after `setFilter` calls (#2244)
+* Fix bugs causing hidden symbols to be rendered (#2246, #2276)
+* Fix raster flickering (#2236)
+* Fix `queryRenderedFeatures` precision at high zoom levels (#2292)
+* Fix holes in GeoJSON data caused by unexpected winding order (#2285)
+* Fix bug causing deleted features to be returned by `queryRenderedFeatures` (#2306)
+* Fix bug causing unexpected fill patterns to be rendered (#2307)
+* Fix popup location with preceding sibling elements (#2311)
+* Fix polygon anti-aliasing (#2319)
+* Fix slivers between non-adjacent polygons (#2319)
+* Fix keyboard shortcuts causing page to scroll (#2312)
 
 ## 0.15.0 (March 1 2016)
 
 #### New Features & Improvements
 
-Add `ImageSource#setCoordinates` and `VideoSource#setCoordinates` (#2184)
+* Add `ImageSource#setCoordinates` and `VideoSource#setCoordinates` (#2184)
 
 #### Bugfixes
 
-Fix flickering on raster layers (#2211)
-Fix browser hang when zooming quickly on raster layers (#2211)
+* Fix flickering on raster layers (#2211)
+* Fix browser hang when zooming quickly on raster layers (#2211)
 
 ## 0.14.3 (Feb 25 2016)
 
 #### New Features & Improvements
 
-Improve responsiveness of zooming out by using cached parent tiles (#2168)
-Improve contextual clues on style API validation (#2170)
-Improve performance of methods including `setData` (#2174)
+* Improve responsiveness of zooming out by using cached parent tiles (#2168)
+* Improve contextual clues on style API validation (#2170)
+* Improve performance of methods including `setData` (#2174)
 
 #### Bugfixes
 
-Fix incorrectly sized line dashes (#2099)
-Fix bug in which `in` feature filter drops features (#2166)
-Fix bug preventing `Map#load` from firing when tile "Not Found" errors occured (#2176)
-Fix rendering artifacts on mobile GPUs (#2117)
+* Fix incorrectly sized line dashes (#2099)
+* Fix bug in which `in` feature filter drops features (#2166)
+* Fix bug preventing `Map#load` from firing when tile "Not Found" errors occured (#2176)
+* Fix rendering artifacts on mobile GPUs (#2117)
 
 ## 0.14.2 (Feb 19 2016)
 
 #### Bugfixes
 
-Look for loaded parent tiles in cache
-Set tile cache size based on viewport size (#2137)
-Fix tile render order for layer-by-layer
-Remove source update throttling (#2139)
-Make panning while zooming more linear (#2070)
-Round points created during bucket creation (#2067)
-Correct bounds for a rotated or tilted map (#1842)
-Fix overscaled featuresAt (#2103)
-Allow using `tileSize: 512` as a switch to trade retina support for 512px raster tiles
-Fix the serialization of paint classes (#2107)
-Fixed bug where unsetting style properties could mutate the value of other style properties (#2105)
-Less slanted dashed lines near sharp corners (#967)
-Fire map#load if no initial style is set (#2042)
+* Look for loaded parent tiles in cache
+* Set tile cache size based on viewport size (#2137)
+* Fix tile render order for layer-by-layer
+* Remove source update throttling (#2139)
+* Make panning while zooming more linear (#2070)
+* Round points created during bucket creation (#2067)
+* Correct bounds for a rotated or tilted map (#1842)
+* Fix overscaled featuresAt (#2103)
+* Allow using `tileSize: 512` as a switch to trade retina support for 512px raster tiles
+* Fix the serialization of paint classes (#2107)
+* Fixed bug where unsetting style properties could mutate the value of other style properties (#2105)
+* Less slanted dashed lines near sharp corners (#967)
+* Fire map#load if no initial style is set (#2042)
 
 ## 0.14.1 (Feb 10 2016)
 
 #### Bugfixes
 
-Fix incorrectly rotated symbols along lines near tile boundries (#2062)
-Fix broken rendering when a fill layer follows certain symbol layers (#2092)
+* Fix incorrectly rotated symbols along lines near tile boundries (#2062)
+* Fix broken rendering when a fill layer follows certain symbol layers (#2092)
 
 ## 0.14.0 (Feb 8 2016)
 
 #### Breaking Changes
 
-Switch `GeoJSONSource` clustering options from being measured in extent-units to pixels (#2026)
+* Switch `GeoJSONSource` clustering options from being measured in extent-units to pixels (#2026)
 
 #### New Features & Improvements
 
-Improved error message for invalid colors (#2006)
-Added support for tiles with variable extents (#2010)
-Improved `filter` performance and maximum size (#2024)
-Changed circle rendering such that all geometry nodes are drawn, not just the geometry's outer ring (#2027)
-Added `Map#getStyle` method (#1982)
+* Improved error message for invalid colors (#2006)
+* Added support for tiles with variable extents (#2010)
+* Improved `filter` performance and maximum size (#2024)
+* Changed circle rendering such that all geometry nodes are drawn, not just the geometry's outer ring (#2027)
+* Added `Map#getStyle` method (#1982)
 
 #### Bugfixes
 
-Fixed bug causing WebGL contexts to be "used up" by calling `mapboxgl.supported()` (#2018)
-Fixed non-deterministic symbol z-order sorting (#2023)
-Fixed garbled labels while zooming (#2012)
-Fixed icon jumping when touching trackpad with two fingers (#1990)
-Fixed overzoomed collision debug labels (#2033)
-Fixed dashes sliding along their line during zooming (#2039)
-Fixed overscaled `minzoom` setting for GeoJSON sources (#1651)
-Fixed overly-strict function validation for duplicate stops (#2075)
-Fixed crash due to `performance.now` not being present on some browsers (#2056)
-Fixed the unsetting of paint properties (#2037)
-Fixed bug causing multiple interaction handler event listeners to be attached (#2069)
-Fixed bug causing only a single debug box to be drawn (#2034)
+* Fixed bug causing WebGL contexts to be "used up" by calling `mapboxgl.supported()` (#2018)
+* Fixed non-deterministic symbol z-order sorting (#2023)
+* Fixed garbled labels while zooming (#2012)
+* Fixed icon jumping when touching trackpad with two fingers (#1990)
+* Fixed overzoomed collision debug labels (#2033)
+* Fixed dashes sliding along their line during zooming (#2039)
+* Fixed overscaled `minzoom` setting for GeoJSON sources (#1651)
+* Fixed overly-strict function validation for duplicate stops (#2075)
+* Fixed crash due to `performance.now` not being present on some browsers (#2056)
+* Fixed the unsetting of paint properties (#2037)
+* Fixed bug causing multiple interaction handler event listeners to be attached (#2069)
+* Fixed bug causing only a single debug box to be drawn (#2034)
 
 ## 0.13.1 (Jan 27 2016)
 
 #### Bugfixes
 
-Fixed broken npm package due to outdated bundled modules
+* Fixed broken npm package due to outdated bundled modules
 
 ## 0.13.0 (Jan 27 2016)
 
 #### Bugfixes
 
-Fixed easeTo pan, zoom, and rotate when initial rotation != 0 (#1950)
-Fixed rendering of tiles with an extent != 4096 (#1952)
-Fixed missing icon collision boxes (#1978)
-Fixed null `Tile#buffers` errors (#1987)
+* Fixed easeTo pan, zoom, and rotate when initial rotation != 0 (#1950)
+* Fixed rendering of tiles with an extent != 4096 (#1952)
+* Fixed missing icon collision boxes (#1978)
+* Fixed null `Tile#buffers` errors (#1987)
 
 #### New Features & Improvements
 
-Added `symbol-avoid-edges` style property (#1951)
-Improved `symbol-max-angle` check algorithm (#1959)
-Added marker clustering! (#1931)
-Added zoomstart, zoom, and zoomend events (#1958)
-Disabled drag on mousedown when using boxzoom (#1907)
+* Added `symbol-avoid-edges` style property (#1951)
+* Improved `symbol-max-angle` check algorithm (#1959)
+* Added marker clustering! (#1931)
+* Added zoomstart, zoom, and zoomend events (#1958)
+* Disabled drag on mousedown when using boxzoom (#1907)
 
 ## 0.12.4 (Jan 19 2016)
 
 #### Bugfixes
 
-Fix elementGroups null value errors (#1933)
-Fix some glyph atlas overflow cases (#1923)
+* Fix elementGroups null value errors (#1933)
+* Fix some glyph atlas overflow cases (#1923)
 
 ## 0.12.3 (Jan 14 2016)
 
 #### API Improvements
-Support inline attribution options in map options (#1865)
-Improve flyTo options (#1854, #1429)
+* Support inline attribution options in map options (#1865)
+* Improve flyTo options (#1854, #1429)
 
 #### Bugfixes
-Fix flickering with overscaled tiles (#1921)
-Remove Node.remove calls for IE browser compatibility (#1900)
-Match patterns at tile boundaries (#1908)
-Fix Tile#positionAt, fix query tests (#1899)
-Fix flickering on streets (#1875)
-Fix text-max-angle property (#1870)
-Fix overscaled line patterns (#1856)
-Fix patterns and icons for mismatched pixelRatios (#1851)
-Fix missing labels when text size 0 at max zoom (#1809)
-Use linear interp when pixel ratios don't match (#1601)
-Fix blank areas, flickering in raster layers (#1876, #675)
-Fix labels slipping/cropping at tile bounds (#757)
+* Fix flickering with overscaled tiles (#1921)
+* Remove Node.remove calls for IE browser compatibility (#1900)
+* Match patterns at tile boundaries (#1908)
+* Fix Tile#positionAt, fix query tests (#1899)
+* Fix flickering on streets (#1875)
+* Fix text-max-angle property (#1870)
+* Fix overscaled line patterns (#1856)
+* Fix patterns and icons for mismatched pixelRatios (#1851)
+* Fix missing labels when text size 0 at max zoom (#1809)
+* Use linear interp when pixel ratios don't match (#1601)
+* Fix blank areas, flickering in raster layers (#1876, #675)
+* Fix labels slipping/cropping at tile bounds (#757)
 
 #### UX Improvements
-Improve touch handler perceived performance (#1844)
+* Improve touch handler perceived performance (#1844)
 
 ## 0.12.2 (Dec 22 2015)
 

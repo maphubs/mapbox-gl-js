@@ -67,47 +67,80 @@ exports._getVisibleCoordinates = function() {
     else return this._pyramid.renderedIDs().map(TileCoord.fromID);
 };
 
-exports._vectorFeaturesAt = function(coord, params, callback) {
+function sortTilesIn(a, b) {
+    var coordA = a.tile.coord;
+    var coordB = b.tile.coord;
+    return (coordA.z - coordB.z) || (coordA.y - coordB.y) || (coordA.x - coordB.x);
+}
+
+function mergeRenderedFeatureLayers(tiles) {
+    var result = tiles[0] || {};
+    for (var i = 1; i < tiles.length; i++) {
+        var tile = tiles[i];
+        for (var layerID in tile) {
+            var tileFeatures = tile[layerID];
+            var resultFeatures = result[layerID];
+            if (resultFeatures === undefined) {
+                resultFeatures = result[layerID] = tileFeatures;
+            } else {
+                for (var f = 0; f < tileFeatures.length; f++) {
+                    resultFeatures.push(tileFeatures[f]);
+                }
+            }
+        }
+    }
+    return result;
+}
+
+exports._queryRenderedVectorFeatures = function(queryGeometry, params, zoom, bearing) {
     if (!this._pyramid)
-        return callback(null, []);
+        return {};
 
-    var result = this._pyramid.tileAt(coord);
-    if (!result)
-        return callback(null, []);
+    var tilesIn = this._pyramid.tilesIn(queryGeometry);
 
-    this.dispatcher.send('query features', {
-        uid: result.tile.uid,
-        x: result.x,
-        y: result.y,
-        scale: result.scale,
-        tileSize: result.tileSize,
-        source: this.id,
-        params: params
-    }, callback, result.tile.workerID);
+    tilesIn.sort(sortTilesIn);
+
+    var styleLayers = this.map.style._layers;
+
+    var renderedFeatureLayers = [];
+    for (var r = 0; r < tilesIn.length; r++) {
+        var tileIn = tilesIn[r];
+        if (!tileIn.tile.featureIndex) continue;
+
+        renderedFeatureLayers.push(tileIn.tile.featureIndex.query({
+            queryGeometry: tileIn.queryGeometry,
+            scale: tileIn.scale,
+            tileSize: tileIn.tile.tileSize,
+            bearing: bearing,
+            params: params
+        }, styleLayers));
+    }
+    return mergeRenderedFeatureLayers(renderedFeatureLayers);
 };
 
+exports._querySourceFeatures = function(params) {
+    if (!this._pyramid) {
+        return [];
+    }
 
-exports._vectorFeaturesIn = function(bounds, params, callback) {
-    if (!this._pyramid)
-        return callback(null, []);
-
-    var results = this._pyramid.tilesIn(bounds);
-    if (!results)
-        return callback(null, []);
-
-    util.asyncAll(results, function queryTile(result, cb) {
-        this.dispatcher.send('query features', {
-            uid: result.tile.uid,
-            source: this.id,
-            minX: result.minX,
-            maxX: result.maxX,
-            minY: result.minY,
-            maxY: result.maxY,
-            params: params
-        }, cb, result.tile.workerID);
-    }.bind(this), function done(err, features) {
-        callback(err, Array.prototype.concat.apply([], features));
+    var pyramid = this._pyramid;
+    var tiles = pyramid.renderedIDs().map(function(id) {
+        return pyramid.getTile(id);
     });
+
+    var result = [];
+
+    var dataTiles = {};
+    for (var i = 0; i < tiles.length; i++) {
+        var tile = tiles[i];
+        var dataID = new TileCoord(Math.min(tile.sourceMaxZoom, tile.coord.z), tile.coord.x, tile.coord.y, 0).id;
+        if (!dataTiles[dataID]) {
+            dataTiles[dataID] = true;
+            tile.querySourceFeatures(result, params);
+        }
+    }
+
+    return result;
 };
 
 /*

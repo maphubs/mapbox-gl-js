@@ -13,11 +13,34 @@ module.exports = Attribution;
  * @param {string} [options.position='bottom-right'] A string indicating the control's position on the map. Options are `top-right`, `top-left`, `bottom-right`, `bottom-left`
  * @example
  * var map = new mapboxgl.Map({attributionControl: false})
- *     .addControl(new mapboxgl.Navigation({position: 'top-left'}));
+ *     .addControl(new mapboxgl.Attribution({position: 'top-left'}));
  */
 function Attribution(options) {
     util.setOptions(this, options);
 }
+
+Attribution.createAttributionString = function(sources) {
+    var attributions = [];
+
+    for (var id in sources) {
+        var source = sources[id];
+        if (source.attribution && attributions.indexOf(source.attribution) < 0) {
+            attributions.push(source.attribution);
+        }
+    }
+
+    // remove any entries that are substrings of another entry.
+    // first sort by length so that substrings come first
+    attributions.sort(function (a, b) { return a.length - b.length; });
+    attributions = attributions.filter(function (attrib, i) {
+        for (var j = i + 1; j < attributions.length; j++) {
+            if (attributions[j].indexOf(attrib) >= 0) { return false; }
+        }
+        return true;
+    });
+
+    return attributions.join(' | ');
+};
 
 Attribution.prototype = util.inherit(Control, {
     options: {
@@ -38,18 +61,10 @@ Attribution.prototype = util.inherit(Control, {
     },
 
     _update: function() {
-        var attributions = [];
-
         if (this._map.style) {
-            for (var id in this._map.style.sources) {
-                var source = this._map.style.sources[id];
-                if (source.attribution && attributions.indexOf(source.attribution) < 0) {
-                    attributions.push(source.attribution);
-                }
-            }
+            this._container.innerHTML = Attribution.createAttributionString(this._map.style.sources);
         }
 
-        this._container.innerHTML = attributions.join(' | ');
         this._editLink = this._container.getElementsByClassName('mapbox-improve-map')[0];
         this._updateEditLink();
     },

@@ -2,8 +2,9 @@
 
 var featureFilter = require('feature-filter');
 var Buffer = require('./buffer');
-var StyleLayer = require('../style/style_layer');
 var util = require('../util/util');
+var StructArrayType = require('../util/struct_array');
+var VertexArrayObject = require('../render/vertex_array_object');
 
 module.exports = Bucket;
 
@@ -22,8 +23,6 @@ Bucket.create = function(options) {
     };
     return new Classes[options.layer.type](options);
 };
-
-Bucket.AttributeType = Buffer.AttributeType;
 
 
 /**
@@ -49,9 +48,6 @@ Bucket.EXTENT = 8192;
  * style spec layer type. Because `Bucket` is an abstract class,
  * instances should be created via the `Bucket.create` method.
  *
- * For performance reasons, `Bucket` creates its "add"s methods at
- * runtime using `new Function(...)`.
- *
  * @class Bucket
  * @private
  * @param options
@@ -66,20 +62,42 @@ function Bucket(options) {
     this.zoom = options.zoom;
     this.overscaling = options.overscaling;
     this.layer = options.layer;
+    this.childLayers = options.childLayers;
 
-    this.layers = [this.layer.id];
     this.type = this.layer.type;
     this.features = [];
     this.id = this.layer.id;
-    this['source-layer'] = this.layer['source-layer'];
-    this.interactive = this.layer.interactive;
+    this.index = options.index;
+    this.sourceLayer = this.layer.sourceLayer;
+    this.sourceLayerIndex = options.sourceLayerIndex;
     this.minZoom = this.layer.minzoom;
     this.maxZoom = this.layer.maxzoom;
 
-    if (options.elementGroups) {
-        this.elementGroups = options.elementGroups;
-        this.buffers = util.mapObject(options.buffers, function(options) {
-            return new Buffer(options);
+    this.paintAttributes = createPaintAttributes(this);
+
+    if (options.arrays) {
+        var childLayers = this.childLayers;
+        this.bufferGroups = util.mapObject(options.arrays, function(programArrayGroups, programName) {
+            return programArrayGroups.map(function(programArrayGroup) {
+
+                var group = util.mapObject(programArrayGroup, function(arrays, layoutOrPaint) {
+                    return util.mapObject(arrays, function(array, name) {
+                        var arrayType = options.arrayTypes[programName][layoutOrPaint][name];
+                        var type = (arrayType.members.length && arrayType.members[0].name === 'vertices' ? Buffer.BufferType.ELEMENT : Buffer.BufferType.VERTEX);
+                        return new Buffer(array, arrayType, type);
+                    });
+                });
+
+                group.vaos = {};
+                if (group.layout.element2) group.secondVaos = {};
+                for (var l = 0; l < childLayers.length; l++) {
+                    var layerName = childLayers[l].id;
+                    group.vaos[layerName] = new VertexArrayObject();
+                    if (group.layout.element2) group.secondVaos[layerName] = new VertexArrayObject();
+                }
+
+                return group;
+            });
         });
     }
 }
@@ -89,14 +107,14 @@ function Bucket(options) {
  * @private
  */
 Bucket.prototype.populateBuffers = function() {
-    this.createStyleLayer();
-    this.createBuffers();
+    this.createArrays();
+    this.recalculateStyleLayers();
 
     for (var i = 0; i < this.features.length; i++) {
         this.addFeature(this.features[i]);
     }
 
-    this.trimBuffers();
+    this.trimArrays();
 };
 
 /**
@@ -104,23 +122,36 @@ Bucket.prototype.populateBuffers = function() {
  * `vertexLength` vertices. If not, append a new elementGroup. Should be called
  * by `populateBuffers` and its callees.
  * @private
- * @param {string} shaderName the name of the shader associated with the buffer that will receive the vertices
+ * @param {string} programName the name of the program associated with the buffer that will receive the vertices
  * @param {number} vertexLength The number of vertices that will be inserted to the buffer.
  */
-Bucket.prototype.makeRoomFor = function(shaderName, numVertices) {
-    var groups = this.elementGroups[shaderName];
+Bucket.prototype.makeRoomFor = function(programName, numVertices) {
+    var groups = this.arrayGroups[programName];
     var currentGroup = groups.length && groups[groups.length - 1];
 
-    if (!currentGroup || currentGroup.vertexLength + numVertices > 65535) {
-        var vertexBuffer = this.buffers[this.getBufferName(shaderName, 'vertex')];
-        var elementBuffer = this.buffers[this.getBufferName(shaderName, 'element')];
-        var secondElementBuffer = this.buffers[this.getBufferName(shaderName, 'secondElement')];
+    if (!currentGroup || currentGroup.layout.vertex.length + numVertices > 65535) {
 
-        currentGroup = new ElementGroup(
-            vertexBuffer.length,
-            elementBuffer && elementBuffer.length,
-            secondElementBuffer && secondElementBuffer.length
-        );
+        var arrayTypes = this.arrayTypes[programName];
+        var VertexArrayType = arrayTypes.layout.vertex;
+        var ElementArrayType = arrayTypes.layout.element;
+        var ElementArrayType2 = arrayTypes.layout.element2;
+
+        currentGroup = {
+            index: groups.length,
+            layout: {},
+            paint: {}
+        };
+
+        currentGroup.layout.vertex = new VertexArrayType();
+        if (ElementArrayType) currentGroup.layout.element = new ElementArrayType();
+        if (ElementArrayType2) currentGroup.layout.element2 = new ElementArrayType2();
+
+        for (var i = 0; i < this.childLayers.length; i++) {
+            var layerName = this.childLayers[i].id;
+            var PaintVertexArrayType = arrayTypes.paint[layerName];
+            currentGroup.paint[layerName] = new PaintVertexArrayType();
+        }
+
         groups.push(currentGroup);
     }
 
@@ -132,96 +163,114 @@ Bucket.prototype.makeRoomFor = function(shaderName, numVertices) {
  * as necessary.
  * @private
  */
-Bucket.prototype.createBuffers = function() {
-    var elementGroups = this.elementGroups = {};
-    var buffers = this.buffers = {};
+Bucket.prototype.createArrays = function() {
+    this.arrayGroups = {};
+    this.arrayTypes = {};
 
-    for (var shaderName in this.shaderInterfaces) {
-        var shaderInterface = this.shaderInterfaces[shaderName];
+    for (var programName in this.programInterfaces) {
+        var programInterface = this.programInterfaces[programName];
+        var programArrayTypes = this.arrayTypes[programName] = { layout: {}, paint: {} };
+        this.arrayGroups[programName] = [];
 
-        if (shaderInterface.vertexBuffer) {
-            var vertexBufferName = this.getBufferName(shaderName, 'vertex');
-            var vertexAddMethodName = this.getAddMethodName(shaderName, 'vertex');
-
-            buffers[vertexBufferName] = new Buffer({
-                type: Buffer.BufferType.VERTEX,
-                attributes: shaderInterface.attributes
+        if (programInterface.vertexBuffer) {
+            var VertexArrayType = new StructArrayType({
+                members: this.programInterfaces[programName].layoutAttributes,
+                alignment: Buffer.VERTEX_ATTRIBUTE_ALIGNMENT
             });
 
-            this[vertexAddMethodName] = this[vertexAddMethodName] || createVertexAddMethod(
-                shaderName,
-                shaderInterface,
-                this.getBufferName(shaderName, 'vertex')
-            );
+            programArrayTypes.layout.vertex = VertexArrayType;
+
+            var layerPaintAttributes = this.paintAttributes[programName];
+            for (var layerName in layerPaintAttributes) {
+                var PaintVertexArrayType = new StructArrayType({
+                    members: layerPaintAttributes[layerName].attributes,
+                    alignment: Buffer.VERTEX_ATTRIBUTE_ALIGNMENT
+                });
+
+                programArrayTypes.paint[layerName] = PaintVertexArrayType;
+            }
         }
 
-        if (shaderInterface.elementBuffer) {
-            var elementBufferName = this.getBufferName(shaderName, 'element');
-            buffers[elementBufferName] = createElementBuffer(shaderInterface.elementBufferComponents);
-            this[this.getAddMethodName(shaderName, 'element')] = createElementAddMethod(this.buffers[elementBufferName]);
+        if (programInterface.elementBuffer) {
+            var ElementArrayType = createElementBufferType(programInterface.elementBufferComponents);
+            programArrayTypes.layout.element = ElementArrayType;
         }
 
-        if (shaderInterface.secondElementBuffer) {
-            var secondElementBufferName = this.getBufferName(shaderName, 'secondElement');
-            buffers[secondElementBufferName] = createElementBuffer(shaderInterface.secondElementBufferComponents);
-            this[this.getAddMethodName(shaderName, 'secondElement')] = createElementAddMethod(this.buffers[secondElementBufferName]);
+        if (programInterface.elementBuffer2) {
+            var ElementArrayType2 = createElementBufferType(programInterface.elementBuffer2Components);
+            programArrayTypes.layout.element2 = ElementArrayType2;
         }
-
-        elementGroups[shaderName] = [];
     }
 };
 
 Bucket.prototype.destroy = function(gl) {
-    for (var k in this.buffers) {
-        this.buffers[k].destroy(gl);
+    for (var programName in this.bufferGroups) {
+        var programBufferGroups = this.bufferGroups[programName];
+        for (var i = 0; i < programBufferGroups.length; i++) {
+            var programBuffers = programBufferGroups[i];
+            for (var paintBuffer in programBuffers.paint) {
+                programBuffers.paint[paintBuffer].destroy(gl);
+            }
+            for (var layoutBuffer in programBuffers.layout) {
+                programBuffers.layout[layoutBuffer].destroy(gl);
+            }
+            for (var j in programBuffers.vaos) {
+                programBuffers.vaos[j].destroy(gl);
+            }
+            for (var k in programBuffers.secondVaos) {
+                programBuffers.secondVaos[k].destroy(gl);
+            }
+        }
+    }
+
+};
+
+Bucket.prototype.trimArrays = function() {
+    for (var programName in this.arrayGroups) {
+        var programArrays = this.arrayGroups[programName];
+        for (var paintArray in programArrays.paint) {
+            programArrays.paint[paintArray].trim();
+        }
+        for (var layoutArray in programArrays.layout) {
+            programArrays.layout[layoutArray].trim();
+        }
     }
 };
 
-Bucket.prototype.trimBuffers = function() {
-    for (var bufferName in this.buffers) {
-        this.buffers[bufferName].trim();
+Bucket.prototype.setUniforms = function(gl, programName, program, layer, globalProperties) {
+    var uniforms = this.paintAttributes[programName][layer.id].uniforms;
+    for (var i = 0; i < uniforms.length; i++) {
+        var uniform = uniforms[i];
+        var uniformLocation = program[uniform.name];
+        gl['uniform' + uniform.components + 'fv'](uniformLocation, uniform.getValue(layer, globalProperties));
     }
-};
-
-/**
- * Get the name of the method used to add an item to a buffer.
- * @param {string} shaderName The name of the shader that will use the buffer
- * @param {string} type One of "vertex", "element", or "secondElement"
- * @returns {string}
- */
-Bucket.prototype.getAddMethodName = function(shaderName, type) {
-    return 'add' + capitalize(shaderName) + capitalize(type);
-};
-
-/**
- * Get the name of a buffer.
- * @param {string} shaderName The name of the shader that will use the buffer
- * @param {string} type One of "vertex", "element", or "secondElement"
- * @returns {string}
- */
-Bucket.prototype.getBufferName = function(shaderName, type) {
-    return shaderName + capitalize(type);
 };
 
 Bucket.prototype.serialize = function() {
     return {
-        layer: {
-            id: this.layer.id,
-            type: this.layer.type
-        },
+        layerId: this.layer.id,
         zoom: this.zoom,
-        elementGroups: this.elementGroups,
-        buffers: util.mapObject(this.buffers, function(buffer) {
-            return buffer.serialize();
+        arrays: util.mapObject(this.arrayGroups, function(programArrayGroups) {
+            return programArrayGroups.map(function(arrayGroup) {
+                return util.mapObject(arrayGroup, function(arrays) {
+                    return util.mapObject(arrays, function(array) {
+                        return array.serialize();
+                    });
+                });
+            });
+        }),
+        arrayTypes: util.mapObject(this.arrayTypes, function(programArrayTypes) {
+            return util.mapObject(programArrayTypes, function(arrayTypes) {
+                return util.mapObject(arrayTypes, function(arrayType) {
+                    return arrayType.serialize();
+                });
+            });
+        }),
+
+        childLayerIds: this.childLayers.map(function(layer) {
+            return layer.id;
         })
     };
-};
-
-Bucket.prototype.createStyleLayer = function() {
-    if (!(this.layer instanceof StyleLayer)) {
-        this.layer = StyleLayer.create(this.layer);
-        this.layer.recalculate(this.zoom, { lastIntegerZoom: Infinity, lastIntegerZoomTime: 0, lastZoom: 0 });
-    }
 };
 
 Bucket.prototype.createFilter = function() {
@@ -230,50 +279,154 @@ Bucket.prototype.createFilter = function() {
     }
 };
 
-
-var createVertexAddMethodCache = {};
-function createVertexAddMethod(shaderName, shaderInterface, bufferName) {
-    var pushArgs = [];
-    for (var i = 0; i < shaderInterface.attributes.length; i++) {
-        pushArgs = pushArgs.concat(shaderInterface.attributes[i].value);
+var FAKE_ZOOM_HISTORY = { lastIntegerZoom: Infinity, lastIntegerZoomTime: 0, lastZoom: 0 };
+Bucket.prototype.recalculateStyleLayers = function() {
+    for (var i = 0; i < this.childLayers.length; i++) {
+        this.childLayers[i].recalculate(this.zoom, FAKE_ZOOM_HISTORY);
     }
+};
 
-    var body = 'return this.buffers.' + bufferName + '.push(' + pushArgs.join(', ') + ');';
-
-    if (!createVertexAddMethodCache[body]) {
-        createVertexAddMethodCache[body] = new Function(shaderInterface.attributeArgs, body);
+Bucket.prototype.getProgramMacros = function(programInterface, layer) {
+    var macros = [];
+    var attributes = this.paintAttributes[programInterface][layer.id].attributes;
+    for (var i = 0; i < attributes.length; i++) {
+        var attribute = attributes[i];
+        macros.push('ATTRIBUTE_' + (attribute.isFunction ? 'ZOOM_FUNCTION_' : '') + attribute.name.toUpperCase());
     }
+    return macros;
+};
 
-    return createVertexAddMethodCache[body];
-}
+Bucket.prototype.addPaintAttributes = function(interfaceName, globalProperties, featureProperties, startGroup, startIndex) {
+    for (var l = 0; l < this.childLayers.length; l++) {
+        var layer = this.childLayers[l];
+        var groups = this.arrayGroups[interfaceName];
+        for (var g = startGroup.index; g < groups.length; g++) {
+            var group = groups[g];
+            var length = group.layout.vertex.length;
+            var vertexArray = group.paint[layer.id];
+            vertexArray.resize(length);
 
-function createElementAddMethod(buffer) {
-    return function(one, two, three) {
-        return buffer.push(one, two, three);
-    };
-}
+            var attributes = this.paintAttributes[interfaceName][layer.id].attributes;
+            for (var m = 0; m < attributes.length; m++) {
+                var attribute = attributes[m];
 
-function createElementBuffer(components) {
-    return new Buffer({
-        type: Buffer.BufferType.ELEMENT,
-        attributes: [{
+                var value = attribute.getValue(layer, globalProperties, featureProperties);
+                var multiplier = attribute.multiplier || 1;
+                var components = attribute.components || 1;
+
+                for (var i = startIndex; i < length; i++) {
+                    var vertex = vertexArray.get(i);
+                    for (var c = 0; c < components; c++) {
+                        var memberName = components > 1 ? (attribute.name + c) : attribute.name;
+                        vertex[memberName] = value[c] * multiplier;
+                    }
+                }
+            }
+        }
+    }
+};
+
+function createElementBufferType(components) {
+    return new StructArrayType({
+        members: [{
+            type: Buffer.ELEMENT_ATTRIBUTE_TYPE,
             name: 'vertices',
-            components: components || 3,
-            type: Buffer.ELEMENT_ATTRIBUTE_TYPE
+            components: components || 3
         }]
     });
 }
 
-function capitalize(string) {
-    return string.charAt(0).toUpperCase() + string.slice(1);
+function createPaintAttributes(bucket) {
+    var attributes = {};
+    for (var interfaceName in bucket.programInterfaces) {
+        var layerPaintAttributes = attributes[interfaceName] = {};
+
+        for (var c = 0; c < bucket.childLayers.length; c++) {
+            var childLayer = bucket.childLayers[c];
+            layerPaintAttributes[childLayer.id] = { attributes: [], uniforms: [] };
+        }
+
+        var interface_ = bucket.programInterfaces[interfaceName];
+        if (!interface_.paintAttributes) continue;
+        for (var i = 0; i < interface_.paintAttributes.length; i++) {
+            var attribute = interface_.paintAttributes[i];
+
+            for (var j = 0; j < bucket.childLayers.length; j++) {
+                var layer = bucket.childLayers[j];
+                var paintAttributes = layerPaintAttributes[layer.id];
+
+                if (layer.isPaintValueFeatureConstant(attribute.paintProperty)) {
+                    paintAttributes.uniforms.push(attribute);
+                } else if (layer.isPaintValueZoomConstant(attribute.paintProperty)) {
+                    paintAttributes.attributes.push(attribute);
+                } else {
+
+                    var zoomLevels = layer.getPaintValueStopZoomLevels(attribute.paintProperty);
+
+                    // Pick the index of the first offset to add to the buffers.
+                    // Find the four closest stops, ideally with two on each side of the zoom level.
+                    var numStops = 0;
+                    while (numStops < zoomLevels.length && zoomLevels[numStops] < bucket.zoom) numStops++;
+                    var stopOffset = Math.max(0, Math.min(zoomLevels.length - 4, numStops - 2));
+
+                    var fourZoomLevels = [];
+                    for (var s = 0; s < 4; s++) {
+                        fourZoomLevels.push(zoomLevels[Math.min(stopOffset + s, zoomLevels.length - 1)]);
+                    }
+
+                    var components = attribute.components;
+                    if (components === 1) {
+                        paintAttributes.attributes.push(util.extend({}, attribute, {
+                            getValue: createFunctionGetValue(attribute, fourZoomLevels),
+                            isFunction: true,
+                            components: components * 4
+                        }));
+                    } else {
+                        for (var k = 0; k < 4; k++) {
+                            paintAttributes.attributes.push(util.extend({}, attribute, {
+                                getValue: createFunctionGetValue(attribute, [fourZoomLevels[k]]),
+                                isFunction: true,
+                                name: attribute.name + k
+                            }));
+                        }
+                    }
+
+                    paintAttributes.uniforms.push(util.extend({}, attribute, {
+                        name: 'u_' + attribute.name.slice(2) + '_t',
+                        getValue: createGetUniform(attribute, stopOffset),
+                        components: 1
+                    }));
+                }
+            }
+        }
+    }
+    return attributes;
 }
 
-function ElementGroup(vertexStartIndex, elementStartIndex, secondElementStartIndex) {
-    // the offset into the vertex buffer of the first vertex in this group
-    this.vertexStartIndex = vertexStartIndex;
-    this.elementStartIndex = elementStartIndex;
-    this.secondElementStartIndex = secondElementStartIndex;
-    this.elementLength = 0;
-    this.vertexLength = 0;
-    this.secondElementLength = 0;
+function createFunctionGetValue(attribute, stopZoomLevels) {
+    return function(layer, globalProperties, featureProperties) {
+        if (stopZoomLevels.length === 1) {
+            // return one multi-component value like color0
+            return attribute.getValue(layer, util.extend({}, globalProperties, { zoom: stopZoomLevels[0] }), featureProperties);
+        } else {
+            // pack multiple single-component values into a four component attribute
+            var values = [];
+            for (var z = 0; z < stopZoomLevels.length; z++) {
+                var stopZoomLevel = stopZoomLevels[z];
+                values.push(attribute.getValue(layer, util.extend({}, globalProperties, { zoom: stopZoomLevel }), featureProperties)[0]);
+            }
+            return values;
+        }
+    };
+}
+
+function createGetUniform(attribute, stopOffset) {
+    return function(layer, globalProperties) {
+        // stopInterp indicates which stops need to be interpolated.
+        // If stopInterp is 3.5 then interpolate half way between stops 3 and 4.
+        var stopInterp = layer.getPaintInterpolationT(attribute.paintProperty, globalProperties.zoom);
+        // We can only store four stop values in the buffers. stopOffset is the number of stops that come
+        // before the stops that were added to the buffers.
+        return [Math.max(0, Math.min(4, stopInterp - stopOffset))];
+    };
 }

@@ -1,6 +1,6 @@
 'use strict';
 
-var test = require('prova');
+var test = require('tap').test;
 var extend = require('../../../js/util/util').extend;
 var Map = require('../../../js/ui/map');
 var Style = require('../../../js/style/style');
@@ -67,28 +67,22 @@ test('Map', function(t) {
                     layers: []
                 });
 
-            function styleEvent(e) {
+            var events = [];
+
+            function checkEvent(e) {
                 t.equal(e.style, style);
+                events.push(e.type);
             }
 
-            function sourceEvent(e) {
-                t.equal(e.style, style);
-            }
-
-            function tileEvent(e) {
-                t.equal(e.style, style);
-            }
-
-            map.on('style.load',    styleEvent);
-            map.on('style.error',   styleEvent);
-            map.on('style.change',  styleEvent);
-            map.on('source.load',   sourceEvent);
-            map.on('source.error',  sourceEvent);
-            map.on('source.change', sourceEvent);
-            map.on('tile.add',      tileEvent);
-            map.on('tile.load',     tileEvent);
-            map.on('tile.error',    tileEvent);
-            map.on('tile.remove',   tileEvent);
+            map.on('style.load',    checkEvent);
+            map.on('style.error',   checkEvent);
+            map.on('style.change',  checkEvent);
+            map.on('source.load',   checkEvent);
+            map.on('source.error',  checkEvent);
+            map.on('source.change', checkEvent);
+            map.on('tile.add',      checkEvent);
+            map.on('tile.error',    checkEvent);
+            map.on('tile.remove',   checkEvent);
 
             map.off('style.error', map.onError);
             map.off('source.error', map.onError);
@@ -103,7 +97,6 @@ test('Map', function(t) {
             style.fire('source.error');
             style.fire('source.change');
             style.fire('tile.add');
-            style.fire('tile.load');
             style.fire('tile.error');
             style.fire('tile.remove');
             style.fire('layer.error');
@@ -164,6 +157,7 @@ test('Map', function(t) {
             });
         });
 
+        t.end();
     });
 
     t.test('#getStyle', function(t) {
@@ -231,6 +225,8 @@ test('Map', function(t) {
                 t.end();
             });
         });
+
+        t.end();
     });
 
     t.test('#resize', function(t) {
@@ -263,6 +259,8 @@ test('Map', function(t) {
 
             t.end();
         });
+
+        t.end();
     });
 
     t.test('#getBounds', function(t) {
@@ -317,7 +315,6 @@ test('Map', function(t) {
             t.notEqual(map.setZoom(0).getZoom(), 0);
             t.end();
         });
-        t.end();
 
         function toFixed(bounds) {
             var n = 10;
@@ -326,6 +323,8 @@ test('Map', function(t) {
                 [bounds[1][0].toFixed(n), bounds[1][1].toFixed(n)]
             ];
         }
+
+        t.end();
     });
 
     t.test('#setMinZoom', function(t) {
@@ -460,25 +459,7 @@ test('Map', function(t) {
         t.end();
     });
 
-    t.test('#batch', function(t) {
-        var map = createMap();
-        map.setStyle({
-            version: 8,
-            sources: {},
-            layers: []
-        });
-        map.on('style.load', function() {
-            map.batch(function(batch) {
-                batch.addLayer({ id: 'background', type: 'background' });
-            });
-            t.ok(map.getLayer('background'), 'has background');
-
-            t.end();
-        });
-    });
-
-
-    t.test('#featuresAt', function(t) {
+    t.test('#queryRenderedFeatures', function(t) {
         var map = createMap();
         map.setStyle({
             "version": 8,
@@ -487,35 +468,35 @@ test('Map', function(t) {
         });
 
         map.on('style.load', function() {
-            var callback = function () {};
             var opts = {};
 
             t.test('normal coords', function(t) {
-                map.style.featuresAt = function (coords, o, cb) {
-                    t.deepEqual(coords, { column: 0.5, row: 0.5, zoom: 0 });
+                map.style.queryRenderedFeatures = function (coords, o, zoom, bearing) {
+                    t.deepEqual(coords, [{ column: 0.5, row: 0.5, zoom: 0 }]);
                     t.equal(o, opts);
-                    t.equal(cb, callback);
-
+                    t.equal(bearing, map.transform.angle);
+                    t.equal(zoom, map.getZoom());
                     t.end();
                 };
 
-                map.featuresAt(map.project(new LngLat(0, 0)), opts, callback);
+                map.queryRenderedFeatures(map.project(new LngLat(0, 0)), opts);
             });
 
-            t.test('wraps coords', function(t) {
-                map.style.featuresAt = function (coords, o, cb) {
+            t.test('does not wrap coords', function(t) {
+                map.style.queryRenderedFeatures = function (coords, o, zoom, bearing) {
                     // avoid floating point issues
-                    t.equal(parseFloat(coords.column.toFixed(4)), 0.5);
-                    t.equal(coords.row, 0.5);
-                    t.equal(coords.zoom, 0);
+                    t.equal(parseFloat(coords[0].column.toFixed(4)), 1.5);
+                    t.equal(coords[0].row, 0.5);
+                    t.equal(coords[0].zoom, 0);
 
                     t.equal(o, opts);
-                    t.equal(cb, callback);
+                    t.equal(bearing, map.transform.angle);
+                    t.equal(zoom, map.getZoom());
 
                     t.end();
                 };
 
-                map.featuresAt(map.project(new LngLat(360, 0)), opts, callback);
+                map.queryRenderedFeatures(map.project(new LngLat(360, 0)), opts);
             });
 
             t.end();
@@ -554,6 +535,7 @@ test('Map', function(t) {
                 };
 
                 map.setLayoutProperty('symbol', 'text-transform', 'lowercase');
+                map.style.update();
                 t.deepEqual(map.getLayoutProperty('symbol', 'text-transform'), 'lowercase');
                 t.end();
             });
@@ -593,6 +575,7 @@ test('Map', function(t) {
                 };
 
                 map.setLayoutProperty('symbol-ref', 'text-transform', 'lowercase');
+                map.style.update();
                 t.deepEqual(map.getLayoutProperty('symbol', 'text-transform'), 'lowercase');
                 t.end();
             });
@@ -701,7 +684,7 @@ test('Map', function(t) {
                     "sources": {
                         "drone": {
                             "type": "video",
-                            "urls": ["https://www.mapbox.com/drone/video/drone.mp4", "https://www.mapbox.com/drone/video/drone.webm"],
+                            "urls": [],
                             "coordinates": [
                                 [-122.51596391201019, 37.56238816766053],
                                 [-122.51467645168304, 37.56410183312965],
@@ -735,7 +718,7 @@ test('Map', function(t) {
                     "sources": {
                         "image": {
                             "type": "image",
-                            "url": "https://www.mapbox.com/drone/video/drone.mp4",
+                            "url": "",
                             "coordinates": [
                                 [-122.51596391201019, 37.56238816766053],
                                 [-122.51467645168304, 37.56410183312965],
@@ -761,6 +744,8 @@ test('Map', function(t) {
                 t.end();
             });
         });
+
+        t.end();
     });
 
     t.test('#setPaintProperty', function (t) {
@@ -798,6 +783,8 @@ test('Map', function(t) {
 
             t.end();
         });
+
+        t.end();
     });
 
     t.test('#onError', function (t) {
@@ -818,7 +805,11 @@ test('Map', function(t) {
                 }
             });
         });
+
+        t.end();
     });
+
+    t.end();
 });
 
 function createStyle() {

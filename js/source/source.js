@@ -68,9 +68,9 @@ exports._getVisibleCoordinates = function() {
 };
 
 function sortTilesIn(a, b) {
-    var coordA = a.tile.coord;
-    var coordB = b.tile.coord;
-    return (coordA.z - coordB.z) || (coordA.y - coordB.y) || (coordA.x - coordB.x);
+    var coordA = a.coord;
+    var coordB = b.coord;
+    return (coordA.z - coordB.z) || (coordA.y - coordB.y) || (coordA.w - coordB.w) || (coordA.x - coordB.x);
 }
 
 function mergeRenderedFeatureLayers(tiles) {
@@ -93,8 +93,8 @@ function mergeRenderedFeatureLayers(tiles) {
 }
 
 exports._queryRenderedVectorFeatures = function(queryGeometry, params, zoom, bearing) {
-    if (!this._pyramid)
-        return {};
+    if (!this._pyramid || !this.map)
+        return [];
 
     var tilesIn = this._pyramid.tilesIn(queryGeometry);
 

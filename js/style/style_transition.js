@@ -8,16 +8,15 @@ module.exports = StyleTransition;
 /*
  * Represents a transition between two declarations
  */
-function StyleTransition(declaration, oldTransition, value) {
+function StyleTransition(reference, declaration, oldTransition, value) {
 
     this.declaration = declaration;
     this.startTime = this.endTime = (new Date()).getTime();
 
-    var type = declaration.type;
-    if ((type === 'string' || type === 'array') && declaration.transitionable) {
+    if (reference.function === 'piecewise-constant' && reference.transition) {
         this.interp = interpZoomTransitioned;
     } else {
-        this.interp = interpolate[type];
+        this.interp = interpolate[reference.type];
     }
 
     this.oldTransition = oldTransition;
@@ -67,12 +66,18 @@ StyleTransition.prototype.calculate = function(globalProperties, featureProperti
 
 };
 
+// This function is used to smoothly transition between discrete values, such
+// as images and dasharrays.
 function interpZoomTransitioned(from, to, t) {
-    return {
-        from: from.to,
-        fromScale: from.toScale,
-        to: to.to,
-        toScale: to.toScale,
-        t: t
-    };
+    if ((from && from.to) === undefined || (to && to.to) === undefined) {
+        return undefined;
+    } else {
+        return {
+            from: from.to,
+            fromScale: from.toScale,
+            to: to.to,
+            toScale: to.toScale,
+            t: t
+        };
+    }
 }

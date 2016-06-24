@@ -50,26 +50,6 @@ exports.bezier = function(p1x, p1y, p2x, p2y) {
 exports.ease = exports.bezier(0.25, 0.1, 0.25, 1);
 
 /**
- * Given a four-element array of numbers that represents a color in
- * RGBA, return a version for which the RGB components are multiplied
- * by the A (alpha) component
- *
- * @param {Array<number>} color color array
- * @returns {Array<number>} premultiplied color array
- * @private
- */
-exports.premultiply = function (color) {
-    if (!color) return null;
-    var opacity = color[3];
-    return [
-        color[0] * opacity,
-        color[1] * opacity,
-        color[2] * opacity,
-        opacity
-    ];
-};
-
-/**
  * constrain n to the given range via min + max
  *
  * @param {number} n value
@@ -464,4 +444,13 @@ exports.arraysIntersect = function(a, b) {
         if (b.indexOf(a[l]) >= 0) return true;
     }
     return false;
+};
+
+var warnOnceHistory = {};
+exports.warnOnce = function(message) {
+    if (!warnOnceHistory[message]) {
+        // console isn't defined in some WebWorkers, see #2558
+        if (typeof console !== "undefined") console.warn(message);
+        warnOnceHistory[message] = true;
+    }
 };

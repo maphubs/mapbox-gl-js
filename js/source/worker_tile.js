@@ -5,6 +5,9 @@ var CollisionTile = require('../symbol/collision_tile');
 var Bucket = require('../data/bucket');
 var CollisionBoxArray = require('../symbol/collision_box');
 var DictionaryCoder = require('../util/dictionary_coder');
+var util = require('../util/util');
+var SymbolInstancesArray = require('../symbol/symbol_instances');
+var SymbolQuadsArray = require('../symbol/symbol_quads');
 
 module.exports = WorkerTile;
 
@@ -26,6 +29,8 @@ WorkerTile.prototype.parse = function(data, layerFamilies, actor, rawTileData, c
     this.data = data;
 
     this.collisionBoxArray = new CollisionBoxArray();
+    this.symbolInstancesArray = new SymbolInstancesArray();
+    this.symbolQuadsArray = new SymbolQuadsArray();
     var collisionTile = new CollisionTile(this.angle, this.pitch, this.collisionBoxArray);
     var featureIndex = new FeatureIndex(this.coord, this.overscaling, collisionTile, data.layers);
     var sourceLayerCoder = new DictionaryCoder(data.layers ? Object.keys(data.layers).sort() : ['_geojsonTileLayer']);
@@ -60,6 +65,8 @@ WorkerTile.prototype.parse = function(data, layerFamilies, actor, rawTileData, c
             overscaling: this.overscaling,
             showCollisionBoxes: this.showCollisionBoxes,
             collisionBoxArray: this.collisionBoxArray,
+            symbolQuadsArray: this.symbolQuadsArray,
+            symbolInstancesArray: this.symbolInstancesArray,
             sourceLayerIndex: sourceLayerCoder.encode(layer.sourceLayer || '_geojsonTileLayer')
         });
         bucket.createFilter();
@@ -76,6 +83,13 @@ WorkerTile.prototype.parse = function(data, layerFamilies, actor, rawTileData, c
     // read each layer, and sort its features into buckets
     if (data.layers) { // vectortile
         for (sourceLayerId in bucketsBySourceLayer) {
+            if (layer.version === 1) {
+                util.warnOnce(
+                    'Vector tile source "' + this.source + '" layer "' +
+                    sourceLayerId + '" does not use vector tile spec v2 ' +
+                    'and therefore may have some rendering errors.'
+                );
+            }
             layer = data.layers[sourceLayerId];
             if (layer) {
                 sortLayerIntoBuckets(layer, bucketsBySourceLayer[sourceLayerId]);
@@ -199,6 +213,8 @@ WorkerTile.prototype.parse = function(data, layerFamilies, actor, rawTileData, c
         var featureIndex_ = featureIndex.serialize();
         var collisionTile_ = collisionTile.serialize();
         var collisionBoxArray = tile.collisionBoxArray.serialize();
+        var symbolInstancesArray = tile.symbolInstancesArray.serialize();
+        var symbolQuadsArray = tile.symbolQuadsArray.serialize();
         var transferables = [rawTileData].concat(featureIndex_.transferables).concat(collisionTile_.transferables);
 
         var nonEmptyBuckets = buckets.filter(isBucketEmpty);
@@ -209,6 +225,8 @@ WorkerTile.prototype.parse = function(data, layerFamilies, actor, rawTileData, c
             featureIndex: featureIndex_.data,
             collisionTile: collisionTile_.data,
             collisionBoxArray: collisionBoxArray,
+            symbolInstancesArray: symbolInstancesArray,
+            symbolQuadsArray: symbolQuadsArray,
             rawTileData: rawTileData
         }, getTransferables(nonEmptyBuckets).concat(transferables));
     }

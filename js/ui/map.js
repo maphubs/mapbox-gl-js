@@ -3,6 +3,7 @@
 var Canvas = require('../util/canvas');
 var util = require('../util/util');
 var browser = require('../util/browser');
+var window = require('../util/browser').window;
 var Evented = require('../util/evented');
 var DOM = require('../util/dom');
 
@@ -13,7 +14,7 @@ var Painter = require('../render/painter');
 var Transform = require('../geo/transform');
 var Hash = require('./hash');
 
-var Interaction = require('./interaction');
+var bindHandlers = require('./bind_handlers');
 
 var Camera = require('./camera');
 var LngLat = require('../geo/lng_lat');
@@ -23,6 +24,37 @@ var Attribution = require('./control/attribution');
 
 var defaultMinZoom = 0;
 var defaultMaxZoom = 20;
+var defaultOptions = {
+    center: [0, 0],
+    zoom: 0,
+    bearing: 0,
+    pitch: 0,
+
+    minZoom: defaultMinZoom,
+    maxZoom: defaultMaxZoom,
+
+    interactive: true,
+
+    scrollZoom: true,
+    boxZoom: true,
+    dragRotate: true,
+    dragPan: true,
+    keyboard: true,
+    doubleClickZoom: true,
+    touchZoomRotate: true,
+
+    bearingSnap: 7,
+
+    hash: false,
+
+    attributionControl: true,
+
+    failIfMajorPerformanceCaveat: false,
+    preserveDrawingBuffer: false,
+
+    trackResize: true,
+    workerCount: Math.max(browser.hardwareConcurrency - 1, 1)
+};
 
 /**
  * Creates a map instance. This is usually the beginning of your map:
@@ -35,12 +67,17 @@ var defaultMaxZoom = 20;
  * @param {string|Element} options.container HTML element to initialize the map in (or element id as string)
  * @param {number} [options.minZoom=0] Minimum zoom of the map
  * @param {number} [options.maxZoom=20] Maximum zoom of the map
- * @param {Object|string} [options.style] Map style. This must be an an object conforming to the schema described in the [style reference](https://mapbox.com/mapbox-gl-style-spec/), or a URL to a JSON style. To load a style from the Mapbox API, you can use a URL of the form `mapbox://styles/:owner/:style`, where `:owner` is your Mapbox account name and `:style` is the style ID. Or you can use one of the predefined Mapbox styles:
- *   * `mapbox://styles/mapbox/basic-v8` - Simple and flexible starting template.
- *   * `mapbox://styles/mapbox/bright-v8` - Template for complex custom basemaps.
- *   * `mapbox://styles/mapbox/streets-v8` - A ready-to-use basemap, perfect for minor customization or incorporating your own data.
- *   * `mapbox://styles/mapbox/light-v8` - Subtle light backdrop for data vizualizations.
- *   * `mapbox://styles/mapbox/dark-v8` - Subtle dark backdrop for data vizualizations.
+ * @param {Object|string} [options.style] Map style. This must be an an object conforming to the schema described in
+ * the [style reference](https://mapbox.com/mapbox-gl-style-spec/), or a URL to a JSON style. To load a style from the
+ * Mapbox API, you can use a URL of the form `mapbox://styles/:owner/:style`, where `:owner` is your Mapbox account
+ * name and `:style` is the style ID. Or you can use one of [the predefined Mapbox styles](https://www.mapbox.com/maps/).
+ * The Style URLs of the predefined Mapbox styles are:
+ *  * `mapbox://styles/mapbox/streets-v9`
+ *  * `mapbox://styles/mapbox/outdoors-v9`
+ *  * `mapbox://styles/mapbox/light-v9`
+ *  * `mapbox://styles/mapbox/dark-v9`
+ *  * `mapbox://styles/mapbox/satellite-v9`
+ *  * `mapbox://styles/mapbox/satellite-streets-v9`
  * @param {boolean} [options.hash=false] If `true`, the map will track and update the page URL according to map position
  * @param {boolean} [options.interactive=true] If `false`, no mouse, touch, or keyboard listeners are attached to the map, so it will not respond to input
  * @param {number} [options.bearingSnap=7] Snap to north threshold in degrees.
@@ -56,6 +93,12 @@ var defaultMaxZoom = 20;
  * @param {boolean} [options.keyboard=true] If `true`, enable keyboard shortcuts (see `KeyboardHandler`).
  * @param {boolean} [options.doubleClickZoom=true] If `true`, enable the "double click to zoom" interaction (see `DoubleClickZoomHandler`).
  * @param {boolean} [options.touchZoomRotate=true] If `true`, enable the "pinch to rotate and zoom" interaction (see `TouchZoomRotateHandler`).
+ * @param {boolean} [options.trackResize=true]  If `true`, automatically resize the map when the browser window resizes.
+ * @param {LngLat} [options.center] The geographic coordinate on which the map's initial viewport is centered.
+ * @param {number} [options.zoom] The zoom level of the map's initial viewport.
+ * @param {number} [options.bearing] The bearing (rotation) of the map's initial viewport measured in degrees counter-clockwise from north.
+ * @param {number} [options.pitch] The pitch of the map's initial viewport measured in degrees.
+ * @param {number} [options.workerCount=navigator.hardwareConcurrency - 1] The number of WebWorkers the map should use to process vector tile data.
  * @example
  * var map = new mapboxgl.Map({
  *   container: 'map',
@@ -67,10 +110,17 @@ var defaultMaxZoom = 20;
  */
 var Map = module.exports = function(options) {
 
-    options = util.inherit(this.options, options);
+    options = util.extend({}, defaultOptions, options);
+
+    if (options.workerCount < 1) {
+        throw new Error('workerCount must an integer greater than or equal to 1.');
+    }
+
     this._interactive = options.interactive;
     this._failIfMajorPerformanceCaveat = options.failIfMajorPerformanceCaveat;
     this._preserveDrawingBuffer = options.preserveDrawingBuffer;
+    this._trackResize = options.trackResize;
+    this._workerCount = options.workerCount;
 
     if (typeof options.container === 'string') {
         this._container = document.getElementById(options.container);
@@ -95,6 +145,7 @@ var Map = module.exports = function(options) {
         '_onSourceAdd',
         '_onSourceRemove',
         '_onSourceUpdate',
+        '_onWindowOnline',
         '_onWindowResize',
         'onError',
         '_update',
@@ -112,19 +163,29 @@ var Map = module.exports = function(options) {
     }.bind(this));
 
     if (typeof window !== 'undefined') {
+        window.addEventListener('online', this._onWindowOnline, false);
         window.addEventListener('resize', this._onWindowResize, false);
     }
 
-    this.interaction = new Interaction(this);
-
-    if (options.interactive) {
-        this.interaction.enable();
-    }
+    bindHandlers(this, {
+        scrollZoom: options.interactive && options.scrollZoom,
+        boxZoom: options.interactive && options.boxZoom,
+        dragRotate: options.interactive && options.dragRotate,
+        dragPan: options.interactive && options.dragPan,
+        keyboard: options.interactive && options.keyboard,
+        doubleClickZoom: options.interactive && options.doubleClickZoom,
+        touchZoomRotate: options.interactive && options.touchZoomRotate
+    }, options);
 
     this._hash = options.hash && (new Hash()).addTo(this);
     // don't set position from options if set through hash
     if (!this._hash || !this._hash._onHashChange()) {
-        this.jumpTo(options);
+        this.jumpTo({
+            center: options.center,
+            zoom: options.zoom,
+            bearing: options.bearing,
+            pitch: options.pitch
+        });
     }
 
     this.stacks = {};
@@ -136,6 +197,7 @@ var Map = module.exports = function(options) {
     if (options.style) this.setStyle(options.style);
     if (options.attributionControl) this.addControl(new Attribution(options.attributionControl));
 
+    this.on('error', this.onError);
     this.on('style.error', this.onError);
     this.on('source.error', this.onError);
     this.on('tile.error', this.onError);
@@ -145,35 +207,6 @@ var Map = module.exports = function(options) {
 util.extend(Map.prototype, Evented);
 util.extend(Map.prototype, Camera.prototype);
 util.extend(Map.prototype, /** @lends Map.prototype */{
-
-    options: {
-        center: [0, 0],
-        zoom: 0,
-        bearing: 0,
-        pitch: 0,
-
-        minZoom: defaultMinZoom,
-        maxZoom: defaultMaxZoom,
-
-        interactive: true,
-
-        scrollZoom: true,
-        boxZoom: true,
-        dragRotate: true,
-        dragPan: true,
-        keyboard: true,
-        doubleClickZoom: true,
-        touchZoomRotate: true,
-
-        bearingSnap: 7,
-
-        hash: false,
-
-        attributionControl: true,
-
-        failIfMajorPerformanceCaveat: false,
-        preserveDrawingBuffer: false
-    },
 
     /**
      * Adds a control to the map, calling `control.addTo(this)`.
@@ -395,25 +428,63 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
     },
 
     /**
-     * Query rendered features within a point or rectangle.
+     * Query rendered features at a point or within a rectangle.
      *
-     * @param {Point|Array<number>|Array<Point>|Array<Array<number>>} [pointOrBox] Either [x, y] pixel coordinates of a point, or [[x1, y1], [x2, y2]] pixel coordinates of opposite corners of bounding rectangle. Optional: use entire viewport if omitted.
-     * @param {Object} params
+     * @param {Point|Array<number>|Array<Point>|Array<Array<number>>} [pointOrBox] - The geometry of a query region:
+     * either [x, y] pixel coordinates of a point, or [[x1, y1], [x2, y2]] pixel coordinates of opposite corners of
+     * a bounding rectangle. Omitting this parameter (i.e. calling `queryRenderedFeatures` with zero arguments,
+     * or with a single `params` argument), is equivalent to passing a bounding rectangle encompassing the entire
+     * viewport.
+     * @param {Object} [params]
      * @param {Array<string>} [params.layers] Only query features from layers with these layer IDs.
-     * @param {Array} [params.filter] A mapbox-gl-style-spec filter.
+     * @param {Array} [params.filter] A [filter](https://www.mapbox.com/mapbox-gl-style-spec/#types-filter).
      *
-     * @returns {Array<Object>} features - An array of [GeoJSON](http://geojson.org/) features
-     * matching the query parameters. The GeoJSON properties of each feature are taken from
-     * the original source. Each feature object also contains a top-level `layer`
-     * property whose value is an object representing the style layer to which the
-     * feature belongs. Layout and paint properties in this object contain values
-     * which are fully evaluated for the given zoom level and feature.
+     * @returns {Array<Object>} An array of [GeoJSON](http://geojson.org/)
+     * [Feature objects](http://geojson.org/geojson-spec.html#feature-objects) satisfying the query parameters.
+     *
+     * The `properties` value of each feature contains the properties of the source feature. For GeoJSON sources, only
+     * string and numeric values are supported; null, Array, and Object values are not supported.
+     *
+     * Each feature includes a top-level `layer` property whose value is an object representing the style layer to
+     * which the feature belongs. Layout and paint properties in this object contain values which are fully evaluated
+     * for the given zoom level and feature.
+     *
+     * Only visible features are returned. The topmost rendered feature appears first in the returned array, and
+     * subsequent features are sorted by descending z-order. Features which are rendered multiple times due to wrapping
+     * across the antimeridian at low zoom levels are returned only once, subject to the caveat that follows.
+     *
+     * Because features come from tiled vector data or GeoJSON data that is converted to tiles internally, feature
+     * geometries are clipped at tile boundaries and features may appear duplicated across tiles. For example, suppose
+     * there is a highway running through the bounding rectangle of a query. The results of the query will be those
+     * parts of the highway that lie within the map tiles covering the bounding rectangle, even if the highway extends
+     * into other tiles, and the portion of the highway within each map tile will be returned as a separate feature.
      *
      * @example
-     * var features = map.queryRenderedFeatures([20, 35], { layers: ['my-layer-name'] });
+     * // Find all features at a point
+     * var features = map.queryRenderedFeatures(
+     *   [20, 35],
+     *   { layers: ['my-layer-name'] }
+     * );
      *
      * @example
-     * var features = map.queryRenderedFeatures([[10, 20], [30, 50]], { layers: ['my-layer-name'] });
+     * // Find all features within a static bounding box
+     * var features = map.queryRenderedFeatures(
+     *   [[10, 20], [30, 50]],
+     *   { layers: ['my-layer-name'] }
+     * );
+     *
+     * @example
+     * // Find all features within a bounding box around a point
+     * var width = 10;
+     * var height = 20;
+     * var features = map.queryRenderedFeatures([
+     *   [point.x - width / 2, point.y - height / 2],
+     *   [point.x + width / 2, point.y + height / 2]
+     * ], { layers: ['my-layer-name'] });
+     *
+     * @example
+     * // Query all rendered features from a single layer
+     * var features = map.queryRenderedFeatures({ layers: ['my-layer-name'] });
      */
     queryRenderedFeatures: function(pointOrBox, params) {
         if (!(pointOrBox instanceof Point || Array.isArray(pointOrBox))) {
@@ -458,14 +529,27 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
     },
 
     /**
-     * Get data from vector tiles as an array of GeoJSON Features.
+     * Query data from vector tile or GeoJSON sources.
      *
      * @param {string} sourceID source ID
      * @param {Object} params
-     * @param {string} [params.sourceLayer] The name of the vector tile layer to get features from.
-     * @param {Array} [params.filter] A mapbox-gl-style-spec filter.
+     * @param {string} [params.sourceLayer] The name of the vector tile layer to get features from. For vector tile
+     * sources, this parameter is required. For GeoJSON sources, it is ignored.
+     * @param {Array} [params.filter] A [filter](https://www.mapbox.com/mapbox-gl-style-spec/#types-filter).
      *
-     * @returns {Array<Object>} features - An array of [GeoJSON](http://geojson.org/) features matching the query parameters. The GeoJSON properties of each feature are taken from the original source. Each feature object also contains a top-level `layer` property whose value is an object representing the style layer to which the feature belongs. Layout and paint properties in this object contain values which are fully evaluated for the given zoom level and feature.
+     * @returns {Array<Object>} An array of [GeoJSON](http://geojson.org/)
+     * [Feature objects](http://geojson.org/geojson-spec.html#feature-objects) satisfying the query parameters.
+     *
+     * In contrast to `queryRenderedFeatures`, `querySourceFeatures` returns all features matching the query parameters,
+     * whether they are rendered by the current style or not. The domain of the query consists of all currently-loaded
+     * vector tile or GeoJSON source tiles; `querySourceFeatures` does not load additional tiles beyond the currently
+     * visible viewport.
+     *
+     * Because features come from tiled vector data or GeoJSON data that is converted to tiles internally, feature
+     * geometries are clipped at tile boundaries and features may appear duplicated across tiles. For example, suppose
+     * there is a highway running through the bounding rectangle of a query. The results of the query will be those
+     * parts of the highway that lie within the map tiles covering the bounding rectangle, even if the highway extends
+     * into other tiles, and the portion of the highway within each map tile will be returned as a separate feature.
      */
     querySourceFeatures: function(sourceID, params) {
         return this.style.querySourceFeatures(sourceID, params);
@@ -510,7 +594,7 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
         } else if (style instanceof Style) {
             this.style = style;
         } else {
-            this.style = new Style(style, this.animationLoop);
+            this.style = new Style(style, this.animationLoop, this._workerCount);
         }
 
         this.style
@@ -543,7 +627,9 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
      * @returns {Object} style
      */
     getStyle: function() {
-        return this.style.serialize();
+        if (this.style) {
+            return this.style.serialize();
+        }
     },
 
     /**
@@ -585,8 +671,14 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
     },
 
     /**
-     * Add a layer to the map style. The layer will be inserted before the layer with
-     * ID `before`, or appended if `before` is omitted.
+     * Add a [Mapbox GL style layer](https://www.mapbox.com/mapbox-gl-style-spec/#layers)
+     * to the map. A layer references a source from which it pulls data and specifies
+     * styling for that data.
+     *
+     * If a value for `before` is provided, the layer will be inserted before the layer
+     * with the specified ID. If `before` is omitted, the layer will be inserted above
+     * every existing layer.
+     *
      * @param {StyleLayer|Object} layer
      * @param {string=} before  ID of an existing layer to insert before
      * @fires layer.add
@@ -775,7 +867,7 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
         });
 
         if (!gl) {
-            console.error('Failed to initialize WebGL');
+            this.fire('error', { error: new Error('Failed to initialize WebGL') });
             return;
         }
 
@@ -796,7 +888,7 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
         if (this._frameId) {
             browser.cancelFrame(this._frameId);
         }
-        this.fire("webglcontextlost", {originalEvent: event});
+        this.fire('webglcontextlost', {originalEvent: event});
     },
 
     /**
@@ -811,7 +903,7 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
         this._setupPainter();
         this.resize();
         this._update();
-        this.fire("webglcontextrestored", {originalEvent: event});
+        this.fire('webglcontextrestored', {originalEvent: event});
     },
 
     /**
@@ -855,41 +947,46 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
      * @private
      */
     _render: function() {
-        if (this.style && this._styleDirty) {
-            this._styleDirty = false;
-            this.style.update(this._classes, this._classOptions);
-            this._classOptions = null;
-            this.style._recalculate(this.transform.zoom);
-        }
+        try {
+            if (this.style && this._styleDirty) {
+                this._styleDirty = false;
+                this.style.update(this._classes, this._classOptions);
+                this._classOptions = null;
+                this.style._recalculate(this.transform.zoom);
+            }
 
-        if (this.style && this._sourcesDirty) {
-            this._sourcesDirty = false;
-            this.style._updateSources(this.transform);
-        }
+            if (this.style && this._sourcesDirty) {
+                this._sourcesDirty = false;
+                this.style._updateSources(this.transform);
+            }
 
-        this.painter.render(this.style, {
-            debug: this.showTileBoundaries,
-            showOverdrawInspector: this._showOverdrawInspector,
-            vertices: this.vertices,
-            rotating: this.rotating,
-            zooming: this.zooming
-        });
+            this.painter.render(this.style, {
+                debug: this.showTileBoundaries,
+                showOverdrawInspector: this._showOverdrawInspector,
+                vertices: this.vertices,
+                rotating: this.rotating,
+                zooming: this.zooming
+            });
 
-        this.fire('render');
+            this.fire('render');
 
-        if (this.loaded() && !this._loaded) {
-            this._loaded = true;
-            this.fire('load');
-        }
+            if (this.loaded() && !this._loaded) {
+                this._loaded = true;
+                this.fire('load');
+            }
 
-        this._frameId = null;
+            this._frameId = null;
 
-        if (!this.animationLoop.stopped()) {
-            this._styleDirty = true;
-        }
+            if (!this.animationLoop.stopped()) {
+                this._styleDirty = true;
+            }
 
-        if (this._sourcesDirty || this._repaint || !this.animationLoop.stopped()) {
-            this._rerender();
+            if (this._sourcesDirty || this._repaint || !this.animationLoop.stopped()) {
+                this._rerender();
+            }
+
+        } catch (error) {
+            this.fire('error', {error: error});
         }
 
         return this;
@@ -920,6 +1017,7 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
      *
      * @example
      * // Disable the default error handler
+     * map.off('error', map.onError);
      * map.off('style.error', map.onError);
      * map.off('source.error', map.onError);
      * map.off('tile.error', map.onError);
@@ -983,8 +1081,14 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
         this._forwardSourceEvent(e);
     },
 
+    _onWindowOnline: function() {
+        this._update();
+    },
+
     _onWindowResize: function() {
-        this.stop().resize()._update();
+        if (this._trackResize) {
+            this.stop().resize()._update();
+        }
     }
 });
 
@@ -995,6 +1099,8 @@ util.extendAll(Map.prototype, /** @lends Map.prototype */{
      *
      * @name showTileBoundaries
      * @type {boolean}
+     * @instance
+     * @memberof Map
      */
     _showTileBoundaries: false,
     get showTileBoundaries() { return this._showTileBoundaries; },
@@ -1011,6 +1117,8 @@ util.extendAll(Map.prototype, /** @lends Map.prototype */{
      *
      * @name showCollisionBoxes
      * @type {boolean}
+     * @instance
+     * @memberof Map
      */
     _showCollisionBoxes: false,
     get showCollisionBoxes() { return this._showCollisionBoxes; },
@@ -1026,6 +1134,8 @@ util.extendAll(Map.prototype, /** @lends Map.prototype */{
      *
      * @name showOverdraw
      * @type {boolean}
+     * @instance
+     * @memberof Map
      */
     _showOverdrawInspector: false,
     get showOverdrawInspector() { return this._showOverdrawInspector; },
@@ -1040,6 +1150,8 @@ util.extendAll(Map.prototype, /** @lends Map.prototype */{
      *
      * @name repaint
      * @type {boolean}
+     * @instance
+     * @memberof Map
      */
     _repaint: false,
     get repaint() { return this._repaint; },
@@ -1058,7 +1170,8 @@ function removeNode(node) {
 }
 
 /**
- * Options common to Map#addClass, Map#removeClass, and Map#setClasses, controlling
+ * Options common to {@link Map#addClass}, {@link Map#removeClass},
+ * and {@link Map#setClasses}, controlling
  * whether or not to smoothly transition property changes triggered by the class change.
  *
  * @typedef {Object} StyleOptions
@@ -1077,3 +1190,151 @@ function removeNode(node) {
   * @memberof Map
   * @instance
   */
+
+
+  /**
+   * When an event fires as a result of a
+   * user interaction, the event will be called with an EventData
+   * object containing the original DOM event along with coordinates of
+   * the event target.
+   *
+   * @typedef {Object} EventData
+   * @property {Event} originalEvent The original DOM event
+   * @property {Point} point The pixel location of the event
+   * @property {LngLat} lngLat The geographic location of the event
+   * @example
+   * map.on('click', function(data) {
+   *   var e = data && data.originalEvent;
+   *   console.log('got click ' + (e ? 'button = ' + e.button : ''));
+   * });
+   */
+
+  /**
+   * Mouse down event.
+   *
+   * @event mousedown
+   * @memberof Map
+   * @instance
+   * @property {EventData} data Original event data: a [mousedown event](https://developer.mozilla.org/en-US/docs/Web/Events/mousedown)
+   */
+
+  /**
+   * Mouse up event.
+   *
+   * @event mouseup
+   * @memberof Map
+   * @instance
+   * @property {EventData} data Original event data: a [mouseup event](https://developer.mozilla.org/en-US/docs/Web/Events/mouseup)
+   */
+
+  /**
+   * Mouse move event.
+   *
+   * @event mousemove
+   * @memberof Map
+   * @instance
+   * @property {EventData} data Original event data: a [mousemouse event](https://developer.mozilla.org/en-US/docs/Web/Events/mousemove)
+   */
+
+  /**
+   * Touch start event.
+   *
+   * @event touchstart
+   * @memberof Map
+   * @instance
+   * @property {EventData} data Original event data: a [touchstart event](https://developer.mozilla.org/en-US/docs/Web/Events/touchstart).
+   */
+
+  /**
+   * Touch end event.
+   *
+   * @event touchend
+   * @memberof Map
+   * @instance
+   * @property {EventData} data Original event data: a [touchcancel event](https://developer.mozilla.org/en-US/docs/Web/Events/touchcancel).
+   */
+
+  /**
+   * Touch move event.
+   *
+   * @event touchmove
+   * @memberof Map
+   * @instance
+   * @property {EventData} data Original event data: a [touchmove event](https://developer.mozilla.org/en-US/docs/Web/Events/touchmove).
+   */
+
+  /**
+   * Touch cancel event.
+   *
+   * @event touchcancel
+   * @memberof Map
+   * @instance
+   * @property {EventData} data Original event data: a [touchcancel event](https://developer.mozilla.org/en-US/docs/Web/Events/touchcancel).
+   */
+
+  /**
+   * Click event.
+   *
+   * @event click
+   * @memberof Map
+   * @instance
+   * @property {EventData} data Original event data: a [click event](https://developer.mozilla.org/en-US/docs/Web/Events/click)
+   */
+
+  /**
+   * Double click event.
+   *
+   * @event dblclick
+   * @memberof Map
+   * @instance
+   * @property {EventData} data Original event data
+   */
+
+  /**
+   * Context menu event.
+   *
+   * @event contextmenu
+   * @memberof Map
+   * @instance
+   * @property {EventData} data Original event data, if available
+   */
+
+  /**
+   * Load event. This event is emitted immediately after all necessary resources have been downloaded
+   * and the first visually complete rendering has occurred.
+   *
+   * @event load
+   * @memberof Map
+   * @instance
+   * @type {Object}
+   */
+
+  /**
+   * Move start event. This event is emitted just before the map begins a transition from one
+   * view to another, either as a result of user interaction or the use of methods such as `Map#jumpTo`.
+   *
+   * @event movestart
+   * @memberof Map
+   * @instance
+   * @property {EventData} data Original event data, if fired interactively
+   */
+
+  /**
+   * Move event. This event is emitted repeatedly during animated transitions from one view to
+   * another, either as a result of user interaction or the use of methods such as `Map#jumpTo`.
+   *
+   * @event move
+   * @memberof Map
+   * @instance
+   * @property {EventData} data Original event data, if fired interactively
+   */
+
+  /**
+   * Move end event. This event is emitted just after the map completes a transition from one
+   * view to another, either as a result of user interaction or the use of methods such as `Map#jumpTo`.
+   *
+   * @event moveend
+   * @memberof Map
+   * @instance
+   * @property {EventData} data Original event data, if fired interactively
+   */

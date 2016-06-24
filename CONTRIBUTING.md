@@ -29,7 +29,7 @@ Install the Xcode Command Line Tools Package
 xcode-select --install
 ```
 
-Install [node.js](https://nodejs.org/)
+Install [node.js](https://nodejs.org/) version 4 or greater
 ```bash
 brew install node
 ```
@@ -47,7 +47,7 @@ npm install
 
 ### Linux
 
-Install [git](https://git-scm.com/), [node.js](https://nodejs.org/), [GNU Make](http://www.gnu.org/software/make/), and libglew-dev
+Install [git](https://git-scm.com/), [node.js](https://nodejs.org/) (version 4 or greater), [GNU Make](http://www.gnu.org/software/make/), and libglew-dev
 ```bash
 sudo apt-get update &&
 sudo apt-get install build-essential git nodejs libglew-dev
@@ -80,7 +80,7 @@ A standalone build allows you to turn the contents of this repository into `mapb
 
 To create a standalone build, run
 ```bash
-npm run production
+npm run build-min
 ```
 
 Once that command finishes, you will have a standalone build at `dist/mapbox-gl.js` and `dist/mapbox-gl.css`

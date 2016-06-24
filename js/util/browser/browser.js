@@ -7,6 +7,8 @@
  * @private
  */
 
+exports.window = window;
+
 /**
  * Provides a function that outputs milliseconds: either performance.now()
  * or a fallback to Date.now()
@@ -74,7 +76,7 @@ exports.timed = function (fn, dur, ctx) {
  */
 exports.supported = require('mapbox-gl-js-supported');
 
-exports.hardwareConcurrency = navigator.hardwareConcurrency || 8;
+exports.hardwareConcurrency = navigator.hardwareConcurrency || 4;
 
 Object.defineProperty(exports, 'devicePixelRatio', {
     get: function() { return window.devicePixelRatio; }

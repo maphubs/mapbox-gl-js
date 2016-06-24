@@ -13,6 +13,7 @@ rm -rf coverage .nyc_output
 npm run lint
 
 # run unit tests
+npm run build-min
 tap --reporter dot --coverage --no-coverage-report test/js/*/*.js
 
 # allow writing core files for render tests
@@ -37,7 +38,7 @@ done
 
 # send coverage report to coveralls
 nyc report --reporter=lcov
-node ./node_modules/coveralls/bin/coveralls.js < ./coverage/lcov.info
+(node ./node_modules/coveralls/bin/coveralls.js < ./coverage/lcov.info) || true
 
 # return original error code
 if [[ ${EXIT_CODE} != 0 ]]; then

@@ -266,6 +266,26 @@ test('StyleLayer#setPaintProperty', function(t) {
         });
     });
 
+    t.test('can unset fill-outline-color #2886', function (t) {
+        var layer = StyleLayer.create({
+            id: 'building',
+            type: 'fill',
+            source: 'streets',
+            paint: {
+                'fill-color': '#00f'
+            }
+        });
+
+        layer.setPaintProperty('fill-outline-color', '#f00');
+        layer.updatePaintTransitions([], {transition: false}, null, createAnimationLoop());
+        t.deepEqual(layer.getPaintValue('fill-outline-color'), [1, 0, 0, 1]);
+        layer.setPaintProperty('fill-outline-color', undefined);
+        layer.updatePaintTransitions([], {transition: false}, null, createAnimationLoop());
+        t.deepEqual(layer.getPaintValue('fill-outline-color'), [0, 0, 1, 1]);
+
+        t.end();
+    });
+
     t.end();
 });
 
@@ -533,6 +553,132 @@ test('StyleLayer#serialize', function(t) {
         t.equal(layer.serialize().layout['text-transform'], 'uppercase');
         t.equal(layer.serialize().layout['text-size'], 20);
 
+        t.end();
+    });
+
+    t.end();
+});
+
+test('StyleLayer#getLayoutValue (default exceptions)', function(t) {
+    t.test('symbol-placement:point => *-rotation-alignment:viewport', function(t) {
+        var layer = StyleLayer.create({
+            "type": "symbol",
+            "layout": {
+                "symbol-placement": "point"
+            }
+        });
+        t.equal(layer.getLayoutValue('text-rotation-alignment'), 'viewport');
+        t.equal(layer.getLayoutValue('icon-rotation-alignment'), 'viewport');
+        t.end();
+    });
+
+    t.test('symbol-placement:line => *-rotation-alignment:map', function(t) {
+        var layer = StyleLayer.create({
+            "type": "symbol",
+            "layout": {
+                "symbol-placement": "line"
+            }
+        });
+        t.equal(layer.getLayoutValue('text-rotation-alignment'), 'map');
+        t.equal(layer.getLayoutValue('icon-rotation-alignment'), 'map');
+        t.end();
+    });
+
+    t.test('text-rotation-alignment:map => text-pitch-alignment:map', function(t) {
+        var layer = StyleLayer.create({
+            "type": "symbol",
+            "layout": {
+                "text-rotation-alignment": "map"
+            }
+        });
+        t.equal(layer.getLayoutValue('text-rotation-alignment'), 'map');
+        t.equal(layer.getLayoutValue('text-pitch-alignment'), 'map');
+        t.end();
+    });
+
+    t.test('text-rotation-alignment:viewport => text-pitch-alignment:viewport', function(t) {
+        var layer = StyleLayer.create({
+            "type": "symbol",
+            "layout": {
+                "text-rotation-alignment": "viewport"
+            }
+        });
+        t.equal(layer.getLayoutValue('text-rotation-alignment'), 'viewport');
+        t.equal(layer.getLayoutValue('text-pitch-alignment'), 'viewport');
+        t.end();
+    });
+
+    t.test('text-pitch-alignment:auto defaults to text-rotation-alignment', function(t) {
+        var layer = StyleLayer.create({
+            "type": "symbol",
+            "layout": {
+                "text-rotation-alignment": "map",
+                "text-pitch-alignment": "auto"
+            }
+        });
+        t.equal(layer.getLayoutValue('text-rotation-alignment'), 'map');
+        t.equal(layer.getLayoutValue('text-pitch-alignment'), 'map');
+        t.end();
+    });
+
+    t.test('text-pitch-alignment respected when set', function(t) {
+        var layer = StyleLayer.create({
+            "type": "symbol",
+            "layout": {
+                "text-rotation-alignment": "viewport",
+                "text-pitch-alignment": "map"
+            }
+        });
+        t.equal(layer.getLayoutValue('text-rotation-alignment'), 'viewport');
+        t.equal(layer.getLayoutValue('text-pitch-alignment'), 'map');
+        t.end();
+    });
+
+    t.test('symbol-placement:point and text-rotation-alignment:auto  => text-rotation-alignment:viewport ', function(t) {
+        var layer = StyleLayer.create({
+            "type": "symbol",
+            "layout": {
+                "symbol-placement": "point",
+                "text-rotation-alignment": "auto"
+            }
+        });
+        t.equal(layer.getLayoutValue('text-rotation-alignment'), 'viewport');
+        t.end();
+    });
+
+    t.test('symbol-placement:line and text-rotation-alignment:auto  => text-rotation-alignment:map ', function(t) {
+        var layer = StyleLayer.create({
+            "type": "symbol",
+            "layout": {
+                "symbol-placement": "line",
+                "text-rotation-alignment": "auto"
+            }
+        });
+        t.equal(layer.getLayoutValue('text-rotation-alignment'), 'map');
+        t.end();
+    });
+
+    t.test('symbol-placement:point and icon-rotation-alignment:auto  => icon-rotation-alignment:viewport ', function(t) {
+        var layer = StyleLayer.create({
+            "type": "symbol",
+            "layout": {
+                "symbol-placement": "point",
+                "icon-rotation-alignment": "auto"
+            }
+        });
+        t.equal(layer.getLayoutValue('icon-rotation-alignment'), 'viewport');
+        t.end();
+    });
+
+    t.test('symbol-placement:line and icon-rotation-alignment:auto  => icon-rotation-alignment:map ', function(t) {
+        var layer = StyleLayer.create({
+            "type": "symbol",
+            "layout": {
+                "symbol-placement": "line",
+                "icon-rotation-alignment": "auto"
+            }
+        });
+        t.equal(layer.getLayoutValue('icon-rotation-alignment'), 'map');
         t.end();
     });
 

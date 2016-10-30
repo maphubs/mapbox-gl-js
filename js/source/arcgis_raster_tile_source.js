@@ -5,12 +5,12 @@ var ajax = require('../util/ajax');
 var Evented = require('../util/evented');
 var Source = require('./source');
 var normalizeURL = require('../util/mapbox').normalizeTileURL;
-
-var TilePyramid = require('./tile_pyramid');
 var browser = require('../util/browser');
 
-//Contains code from esri-leaflet https://github.com/Esri/esri-leaflet
 
+module.exports = ArcGISRasterTileSource;
+
+//Contains code from esri-leaflet https://github.com/Esri/esri-leaflet
 var MercatorZoomLevels = {
     '0': 156543.03392799999,
     '1': 78271.516963999893,
@@ -37,9 +37,6 @@ var MercatorZoomLevels = {
     '22': 0.0373227677059525,
     '23': 0.0186613838529763
 };
-
-module.exports = ArcGISRasterTileSource;
-
 
 var _withinPercentage = function (a, b, percentage) {
     var diff = Math.abs((a / b) - 1);
@@ -80,20 +77,6 @@ var loadArcGISMapServer = function(options) {
             this.fire('tile.error', {tile: null, error: 'non-mercator spatial reference'});
         }
 
-        this._pyramid = new TilePyramid({
-            tileSize: metadata.tileInfo.rows,
-            minzoom: this.minzoom,
-            maxzoom: this.maxzoom,
-            roundZoom: this.roundZoom,
-            reparseOverscaled: this.reparseOverscaled,
-            load: this._loadTile.bind(this),
-            abort: this._abortTile.bind(this),
-            unload: this._unloadTile.bind(this),
-            add: this._addTile.bind(this),
-            remove: this._removeTile.bind(this),
-            redoPlacement: this._redoTilePlacement ? this._redoTilePlacement.bind(this) : undefined
-        });
-
         this.fire('load');
     }.bind(this);
 
@@ -105,8 +88,13 @@ var loadArcGISMapServer = function(options) {
 };
 
 
-function ArcGISRasterTileSource(options) {
-    util.extend(this, util.pick(options, ['url', 'tileSize', 'token']));
+function ArcGISRasterTileSource(id, options, dispatcher, eventedParent) {
+    this.id = id;
+    this.dispatcher = dispatcher;
+    util.extend(this, util.pick(options, ['url', 'scheme', 'tileSize']));
+
+    this.setEventedParent(eventedParent);
+    this.fire('dataloading', {dataType: 'source'});
 
     loadArcGISMapServer.call(this, options);
 }
@@ -140,20 +128,6 @@ ArcGISRasterTileSource.prototype = util.inherit(Evented, {
         }
     },
 
-    loaded: function() {
-        return this._loaded;
-    },
-
-    update: function(transform) {
-        if (this._pyramid) {
-            this._pyramid.update(this.used, transform, this.map.style.rasterFadeDuration);
-        }
-    },
-
-    reload: function() {
-        // noop
-    },
-
     serialize: function() {
         return {
             type: 'arcgisraster',
@@ -166,7 +140,7 @@ ArcGISRasterTileSource.prototype = util.inherit(Evented, {
     getTile: Source._getTile,
 
     //From https://github.com/Leaflet/Leaflet/blob/master/src/layer/tile/TileLayer.js
-    _getSubdomain: function (tilePoint) {
+    getSubdomain: function (tilePoint) {
         var index = Math.abs(tilePoint.x + tilePoint.y) % this.subdomains.length;
         return this.subdomains[index];
     },
@@ -188,7 +162,7 @@ ArcGISRasterTileSource.prototype = util.inherit(Evented, {
     },
 
 
-    _loadTile: function(tile) {
+    loadTile: function(tile) {
         //var url = normalizeURL(tile.coord.url(this.tiles), this.url, this.tileSize);
         //convert to ags coords
         var tilePoint = tile.coord;
@@ -240,7 +214,7 @@ ArcGISRasterTileSource.prototype = util.inherit(Evented, {
         }
     },
 
-    _abortTile: function(tile) {
+    abortTile: function(tile) {
         tile.aborted = true;
 
         if (tile.request) {
@@ -249,23 +223,7 @@ ArcGISRasterTileSource.prototype = util.inherit(Evented, {
         }
     },
 
-    _addTile: function(tile) {
-        this.fire('tile.add', {tile: tile});
-    },
-
-    _removeTile: function(tile) {
-        this.fire('tile.remove', {tile: tile});
-    },
-
-    _unloadTile: function(tile) {
+    unloadTile: function(tile) {
         if (tile.texture) this.map.painter.saveTexture(tile.texture);
-    },
-
-    featuresAt: function(point, params, callback) {
-        callback(null, []);
-    },
-
-    featuresIn: function(bbox, params, callback) {
-        callback(null, []);
     }
 });

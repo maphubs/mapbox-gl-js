@@ -5,7 +5,7 @@ var util = require('../util/util');
 var sourceTypes = {
     'vector': require('../source/vector_tile_source'),
     'raster': require('../source/raster_tile_source'),
-    'arcgisraster': require('./arcgis_raster_tile_source'),
+    'arcgisraster': require('../source/arcgis_raster_tile_source'),
     'geojson': require('../source/geojson_source'),
     'video': require('../source/video_source'),
     'image': require('../source/image_source')

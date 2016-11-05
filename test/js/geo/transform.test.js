@@ -1,19 +1,19 @@
 'use strict';
 
-var test = require('tap').test;
-var Point = require('point-geometry');
-var Transform = require('../../../js/geo/transform');
-var TileCoord = require('../../../js/source/tile_coord');
-var LngLat = require('../../../js/geo/lng_lat');
+const test = require('mapbox-gl-js-test').test;
+const Point = require('point-geometry');
+const Transform = require('../../../js/geo/transform');
+const TileCoord = require('../../../js/source/tile_coord');
+const LngLat = require('../../../js/geo/lng_lat');
 
-var fixed = require('../../testutil/fixed');
-var fixedLngLat = fixed.LngLat;
-var fixedCoord = fixed.Coord;
+const fixed = require('mapbox-gl-js-test/fixed');
+const fixedLngLat = fixed.LngLat;
+const fixedCoord = fixed.Coord;
 
-test('transform', function(t) {
+test('transform', (t) => {
 
-    t.test('creates a transform', function(t) {
-        var transform = new Transform();
+    t.test('creates a transform', (t) => {
+        const transform = new Transform();
         transform.resize(500, 500);
         t.equal(transform.unmodified, true);
         t.equal(transform.tileSize, 512, 'tileSize');
@@ -45,8 +45,15 @@ test('transform', function(t) {
         t.end();
     });
 
-    t.test('panBy', function(t) {
-        var transform = new Transform();
+    t.test('does not throw on bad center', (t) => {
+        const transform = new Transform();
+        transform.resize(500, 500);
+        transform.center = {lng: 50, lat: -90};
+        t.end();
+    });
+
+    t.test('panBy', (t) => {
+        const transform = new Transform();
         transform.resize(500, 500);
         transform.latRange = undefined;
         t.deepEqual(transform.center, { lng: 0, lat: 0 });
@@ -55,8 +62,8 @@ test('transform', function(t) {
         t.end();
     });
 
-    t.test('setLocationAt', function(t) {
-        var transform = new Transform();
+    t.test('setLocationAt', (t) => {
+        const transform = new Transform();
         transform.resize(500, 500);
         transform.zoom = 4;
         t.deepEqual(transform.center, { lng: 0, lat: 0 });
@@ -65,8 +72,8 @@ test('transform', function(t) {
         t.end();
     });
 
-    t.test('setLocationAt tilted', function(t) {
-        var transform = new Transform();
+    t.test('setLocationAt tilted', (t) => {
+        const transform = new Transform();
         transform.resize(500, 500);
         transform.zoom = 4;
         transform.pitch = 50;
@@ -76,16 +83,16 @@ test('transform', function(t) {
         t.end();
     });
 
-    t.test('has a default zoom', function(t) {
-        var transform = new Transform();
+    t.test('has a default zoom', (t) => {
+        const transform = new Transform();
         transform.resize(500, 500);
         t.equal(transform.tileZoom, 0);
         t.equal(transform.tileZoom, transform.zoom);
         t.end();
     });
 
-    t.test('lngRange & latRange constrain zoom and center', function(t) {
-        var transform = new Transform();
+    t.test('lngRange & latRange constrain zoom and center', (t) => {
+        const transform = new Transform();
         transform.center = new LngLat(0, 0);
         transform.zoom = 10;
         transform.resize(500, 500);
@@ -106,14 +113,14 @@ test('transform', function(t) {
         t.end();
     });
 
-    test('coveringTiles', function(t) {
-        var options = {
+    test('coveringTiles', (t) => {
+        const options = {
             minzoom: 1,
             maxzoom: 10,
             tileSize: 512
         };
 
-        var transform = new Transform();
+        const transform = new Transform();
         transform.resize(200, 200);
 
         transform.zoom = 0;
@@ -134,14 +141,14 @@ test('transform', function(t) {
         t.end();
     });
 
-    test('coveringZoomLevel', function(t) {
-        var options = {
+    test('coveringZoomLevel', (t) => {
+        const options = {
             minzoom: 1,
             maxzoom: 10,
             tileSize: 512
         };
 
-        var transform = new Transform();
+        const transform = new Transform();
 
         transform.zoom = 0;
         t.deepEqual(transform.coveringZoomLevel(options), 0);
@@ -194,8 +201,8 @@ test('transform', function(t) {
         t.end();
     });
 
-    t.test('clamps pitch', function(t) {
-        var transform = new Transform();
+    t.test('clamps pitch', (t) => {
+        const transform = new Transform();
 
         transform.pitch = 45;
         t.equal(transform.pitch, 45);

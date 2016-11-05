@@ -1,9 +1,9 @@
 'use strict';
 
-var Worker = require('../source/worker');
+const Worker = require('../source/worker');
 
 module.exports = function () {
-    var parentListeners = [],
+    const parentListeners = [],
         workerListeners = [],
         parentBus = new MessageBus(workerListeners, parentListeners),
         workerBus = new MessageBus(parentListeners, workerListeners);
@@ -11,7 +11,7 @@ module.exports = function () {
     parentBus.target = workerBus;
     workerBus.target = parentBus;
     // workerBus substitutes the WebWorker global `self`, and Worker uses
-    // self.importScripts for the 'load worker source' target.
+    // self.importScripts for the 'loadWorkerSource' target.
     workerBus.importScripts = function () {};
 
     new Worker(workerBus);
@@ -27,17 +27,17 @@ function MessageBus(addListeners, postListeners) {
             }
         },
         removeEventListener: function(event, callback) {
-            var i = addListeners.indexOf(callback);
+            const i = addListeners.indexOf(callback);
             if (i >= 0) {
                 addListeners.splice(i, 1);
             }
         },
         postMessage: function(data) {
-            setImmediate(function() {
-                for (var i = 0; i < postListeners.length; i++) {
+            setImmediate(() => {
+                for (let i = 0; i < postListeners.length; i++) {
                     postListeners[i]({data: data, target: this.target});
                 }
-            }.bind(this));
+            });
         },
         terminate: function() {
             addListeners.splice(0, addListeners.length);

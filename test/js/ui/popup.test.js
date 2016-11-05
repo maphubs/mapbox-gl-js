@@ -1,27 +1,26 @@
 'use strict';
 
-var test = require('tap').test;
-var sinon = require('sinon');
-var window = require('../../../js/util/window');
-var Map = require('../../../js/ui/map');
-var Popup = require('../../../js/ui/popup');
-var LngLat = require('../../../js/geo/lng_lat');
-var Point = require('point-geometry');
-var simulateClick = require('../../testutil/simulate_interaction').click;
+const test = require('mapbox-gl-js-test').test;
+const window = require('../../../js/util/window');
+const Map = require('../../../js/ui/map');
+const Popup = require('../../../js/ui/popup');
+const LngLat = require('../../../js/geo/lng_lat');
+const Point = require('point-geometry');
+const simulateClick = require('mapbox-gl-js-test/simulate_interaction').click;
 
-var containerWidth = 512;
-var containerHeight = 512;
+const containerWidth = 512;
+const containerHeight = 512;
 
 function createMap() {
-    var container = window.document.createElement('div');
+    const container = window.document.createElement('div');
     container.offsetWidth = containerWidth;
     container.offsetHeight = containerHeight;
     return new Map({container: container});
 }
 
-test('Popup#addTo adds a .mapboxgl-popup element', function (t) {
-    var map = createMap();
-    var popup = new Popup()
+test('Popup#addTo adds a .mapboxgl-popup element', (t) => {
+    const map = createMap();
+    const popup = new Popup()
         .setText("Test")
         .setLngLat([0, 0])
         .addTo(map);
@@ -31,9 +30,9 @@ test('Popup#addTo adds a .mapboxgl-popup element', function (t) {
     t.end();
 });
 
-test('Popup closes on map click events by default', function (t) {
-    var map = createMap();
-    var popup = new Popup()
+test('Popup closes on map click events by default', (t) => {
+    const map = createMap();
+    const popup = new Popup()
         .setText("Test")
         .setLngLat([0, 0])
         .addTo(map);
@@ -44,9 +43,9 @@ test('Popup closes on map click events by default', function (t) {
     t.end();
 });
 
-test('Popup does not close on map click events when the closeOnClick option is false', function (t) {
-    var map = createMap();
-    var popup = new Popup({closeOnClick: false})
+test('Popup does not close on map click events when the closeOnClick option is false', (t) => {
+    const map = createMap();
+    const popup = new Popup({closeOnClick: false})
         .setText("Test")
         .setLngLat([0, 0])
         .addTo(map);
@@ -57,9 +56,9 @@ test('Popup does not close on map click events when the closeOnClick option is f
     t.end();
 });
 
-test('Popup closes on close button click events', function (t) {
-    var map = createMap();
-    var popup = new Popup()
+test('Popup closes on close button click events', (t) => {
+    const map = createMap();
+    const popup = new Popup()
         .setText("Test")
         .setLngLat([0, 0])
         .addTo(map);
@@ -70,8 +69,8 @@ test('Popup closes on close button click events', function (t) {
     t.end();
 });
 
-test('Popup has no close button if closeButton option is false', function (t) {
-    var map = createMap();
+test('Popup has no close button if closeButton option is false', (t) => {
+    const map = createMap();
 
     new Popup({closeButton: false})
         .setText("Test")
@@ -82,9 +81,9 @@ test('Popup has no close button if closeButton option is false', function (t) {
     t.end();
 });
 
-test('Popup fires close event when removed', function (t) {
-    var map = createMap();
-    var onClose = sinon.spy();
+test('Popup fires close event when removed', (t) => {
+    const map = createMap();
+    const onClose = t.spy();
 
     new Popup()
         .setText("Test")
@@ -97,8 +96,8 @@ test('Popup fires close event when removed', function (t) {
     t.end();
 });
 
-test('Popup content can be set via setText', function (t) {
-    var map = createMap();
+test('Popup content can be set via setText', (t) => {
+    const map = createMap();
 
     new Popup({closeButton: false})
         .setLngLat([0, 0])
@@ -109,8 +108,8 @@ test('Popup content can be set via setText', function (t) {
     t.end();
 });
 
-test('Popup content can be set via setHTML', function (t) {
-    var map = createMap();
+test('Popup content can be set via setHTML', (t) => {
+    const map = createMap();
 
     new Popup({closeButton: false})
         .setLngLat([0, 0])
@@ -121,9 +120,9 @@ test('Popup content can be set via setHTML', function (t) {
     t.end();
 });
 
-test('Popup content can be set via setDOMContent', function (t) {
-    var map = createMap();
-    var content = window.document.createElement('span');
+test('Popup content can be set via setDOMContent', (t) => {
+    const map = createMap();
+    const content = window.document.createElement('span');
 
     new Popup({closeButton: false})
         .setLngLat([0, 0])
@@ -134,8 +133,8 @@ test('Popup content can be set via setDOMContent', function (t) {
     t.end();
 });
 
-test('Popup#setText protects against XSS', function (t) {
-    var map = createMap();
+test('Popup#setText protects against XSS', (t) => {
+    const map = createMap();
 
     new Popup({closeButton: false})
         .setLngLat([0, 0])
@@ -146,10 +145,10 @@ test('Popup#setText protects against XSS', function (t) {
     t.end();
 });
 
-test('Popup content setters overwrite previous content', function (t) {
-    var map = createMap();
+test('Popup content setters overwrite previous content', (t) => {
+    const map = createMap();
 
-    var popup = new Popup({closeButton: false})
+    const popup = new Popup({closeButton: false})
         .setLngLat([0, 0])
         .addTo(map);
 
@@ -165,7 +164,7 @@ test('Popup content setters overwrite previous content', function (t) {
     t.end();
 });
 
-test('Popup provides LngLat accessors', function (t) {
+test('Popup provides LngLat accessors', (t) => {
     t.equal(new Popup().getLngLat(), undefined);
 
     t.ok(new Popup().setLngLat([1, 2]).getLngLat() instanceof LngLat);
@@ -177,9 +176,9 @@ test('Popup provides LngLat accessors', function (t) {
     t.end();
 });
 
-test('Popup anchors as specified by the anchor option', function (t) {
-    var map = createMap();
-    var popup = new Popup({anchor: 'top-left'})
+test('Popup anchors as specified by the anchor option', (t) => {
+    const map = createMap();
+    const popup = new Popup({anchor: 'top-left'})
         .setLngLat([0, 0])
         .setText('Test')
         .addTo(map);
@@ -198,14 +197,14 @@ test('Popup anchors as specified by the anchor option', function (t) {
     ['bottom-left',  new Point(10, containerHeight - 10),                   'translate(0,-100%) translate(7px,-7px)'],
     ['left',         new Point(10, containerHeight / 2),                    'translate(0,-50%) translate(10px,0px)'],
     ['bottom',       new Point(containerWidth / 2, containerHeight / 2),    'translate(-50%,-100%) translate(0px,-10px)']
-].forEach(function (args) {
-    var anchor = args[0];
-    var point = args[1];
-    var transform = args[2];
+].forEach((args) => {
+    const anchor = args[0];
+    const point = args[1];
+    const transform = args[2];
 
-    test(`Popup automatically anchors to ${anchor}`, function (t) {
-        var map = createMap();
-        var popup = new Popup()
+    test(`Popup automatically anchors to ${anchor}`, (t) => {
+        const map = createMap();
+        const popup = new Popup()
             .setLngLat([0, 0])
             .setText('Test')
             .addTo(map);
@@ -213,18 +212,18 @@ test('Popup anchors as specified by the anchor option', function (t) {
         popup._container.offsetWidth = 100;
         popup._container.offsetHeight = 100;
 
-        sinon.stub(map, 'project', function () { return point; });
+        t.stub(map, 'project', () => { return point; });
         popup.setLngLat([0, 0]);
 
         t.ok(popup._container.classList.contains(`mapboxgl-popup-anchor-${anchor}`));
         t.end();
     });
 
-    test(`Popup translation reflects offset and ${anchor} anchor`, function (t) {
-        var map = createMap();
-        sinon.stub(map, 'project', function () { return new Point(0, 0); });
+    test(`Popup translation reflects offset and ${anchor} anchor`, (t) => {
+        const map = createMap();
+        t.stub(map, 'project', () => { return new Point(0, 0); });
 
-        var popup = new Popup({anchor: anchor, offset: 10})
+        const popup = new Popup({anchor: anchor, offset: 10})
             .setLngLat([0, 0])
             .setText('Test')
             .addTo(map);
@@ -234,14 +233,14 @@ test('Popup anchors as specified by the anchor option', function (t) {
     });
 });
 
-test('Popup automatically anchors to top if its bottom offset would push it off-screen', function (t) {
-    var map = createMap();
-    var point = new Point(containerWidth / 2, containerHeight / 2);
-    var options = { offset: {
+test('Popup automatically anchors to top if its bottom offset would push it off-screen', (t) => {
+    const map = createMap();
+    const point = new Point(containerWidth / 2, containerHeight / 2);
+    const options = { offset: {
         'bottom': [0, -25],
         'top': [0, 0]
     }};
-    var popup = new Popup(options)
+    const popup = new Popup(options)
         .setLngLat([0, 0])
         .setText('Test')
         .addTo(map);
@@ -249,18 +248,18 @@ test('Popup automatically anchors to top if its bottom offset would push it off-
     popup._container.offsetWidth = (containerWidth / 2);
     popup._container.offsetHeight = (containerHeight / 2);
 
-    sinon.stub(map, 'project', function () { return point; });
+    t.stub(map, 'project', () => { return point; });
     popup.setLngLat([0, 0]);
 
     t.ok(popup._container.classList.contains('mapboxgl-popup-anchor-top'));
     t.end();
 });
 
-test('Popup is offset via a PointLike offset option', function (t) {
-    var map = createMap();
-    sinon.stub(map, 'project', function () { return new Point(0, 0); });
+test('Popup is offset via a PointLike offset option', (t) => {
+    const map = createMap();
+    t.stub(map, 'project', () => { return new Point(0, 0); });
 
-    var popup = new Popup({anchor: 'top-left', offset: [5, 10]})
+    const popup = new Popup({anchor: 'top-left', offset: [5, 10]})
         .setLngLat([0, 0])
         .setText('Test')
         .addTo(map);
@@ -269,11 +268,11 @@ test('Popup is offset via a PointLike offset option', function (t) {
     t.end();
 });
 
-test('Popup is offset via an object offset option', function (t) {
-    var map = createMap();
-    sinon.stub(map, 'project', function () { return new Point(0, 0); });
+test('Popup is offset via an object offset option', (t) => {
+    const map = createMap();
+    t.stub(map, 'project', () => { return new Point(0, 0); });
 
-    var popup = new Popup({anchor: 'top-left', offset: {'top-left': [5, 10]}})
+    const popup = new Popup({anchor: 'top-left', offset: {'top-left': [5, 10]}})
         .setLngLat([0, 0])
         .setText('Test')
         .addTo(map);
@@ -282,8 +281,8 @@ test('Popup is offset via an object offset option', function (t) {
     t.end();
 });
 
-test('Popup can be removed and added again (#1477)', function (t) {
-    var map = createMap();
+test('Popup can be removed and added again (#1477)', (t) => {
+    const map = createMap();
 
     new Popup()
         .setText("Test")
@@ -296,8 +295,8 @@ test('Popup can be removed and added again (#1477)', function (t) {
     t.end();
 });
 
-test('Popup#addTo is idempotent (#1811)', function (t) {
-    var map = createMap();
+test('Popup#addTo is idempotent (#1811)', (t) => {
+    const map = createMap();
 
     new Popup({closeButton: false})
         .setText("Test")

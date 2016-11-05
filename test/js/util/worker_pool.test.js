@@ -1,37 +1,37 @@
 'use strict';
 
-var test = require('tap').test;
-var proxyquire = require('proxyquire');
+const test = require('mapbox-gl-js-test').test;
+const proxyquire = require('proxyquire');
 
-test('WorkerPool', function (t) {
-    t.test('#acquire', function (t) {
-        var WorkerPool = proxyquire('../../../js/util/worker_pool', {
+test('WorkerPool', (t) => {
+    t.test('#acquire', (t) => {
+        const WorkerPool = proxyquire('../../../js/util/worker_pool', {
             '../mapbox-gl': { workerCount: 4 }
         });
 
-        var pool = new WorkerPool();
+        const pool = new WorkerPool();
 
         t.notOk(pool.workers);
-        var workers1 = pool.acquire('map-1');
-        var workers2 = pool.acquire('map-2');
+        const workers1 = pool.acquire('map-1');
+        const workers2 = pool.acquire('map-2');
         t.equal(workers1.length, 4);
         t.equal(workers2.length, 4);
 
         // check that the two different dispatchers' workers arrays correspond
-        workers1.forEach(function (w, i) { t.equal(w, workers2[i]); });
+        workers1.forEach((w, i) => { t.equal(w, workers2[i]); });
         t.end();
     });
 
-    t.test('#release', function (t) {
-        var workersTerminated = 0;
-        var WorkerPool = proxyquire('../../../js/util/worker_pool', {
+    t.test('#release', (t) => {
+        let workersTerminated = 0;
+        const WorkerPool = proxyquire('../../../js/util/worker_pool', {
             '../mapbox-gl': { workerCount: 4 }
         });
 
-        var pool = new WorkerPool();
+        const pool = new WorkerPool();
         pool.acquire('map-1');
-        var workers = pool.acquire('map-2');
-        workers.forEach(function (w) {
+        const workers = pool.acquire('map-2');
+        workers.forEach((w) => {
             w.terminate = function () { workersTerminated += 1; };
         });
 

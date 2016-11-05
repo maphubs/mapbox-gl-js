@@ -1,25 +1,23 @@
 'use strict';
 
-var assert = require('assert');
-var WebWorker = require('./web_worker');
-
-module.exports = WorkerPool;
+const assert = require('assert');
+const WebWorker = require('./web_worker');
 
 /**
  * Constructs a worker pool.
  * @private
  */
-function WorkerPool() {
-    this.active = {};
-}
+class WorkerPool {
+    constructor() {
+        this.active = {};
+    }
 
-WorkerPool.prototype = {
-    acquire: function (mapId) {
+    acquire(mapId) {
         if (!this.workers) {
             // Lazily look up the value of mapboxgl.workerCount.  This allows
             // client code a chance to set it while circumventing cyclic
             // dependency problems
-            var workerCount = require('../mapbox-gl').workerCount;
+            const workerCount = require('../mapbox-gl').workerCount;
             assert(typeof workerCount === 'number' && workerCount < Infinity);
 
             this.workers = [];
@@ -30,15 +28,17 @@ WorkerPool.prototype = {
 
         this.active[mapId] = true;
         return this.workers.slice();
-    },
+    }
 
-    release: function (mapId) {
+    release(mapId) {
         delete this.active[mapId];
         if (Object.keys(this.active).length === 0) {
-            this.workers.forEach(function (w) {
+            this.workers.forEach((w) => {
                 w.terminate();
             });
             this.workers = null;
         }
     }
-};
+}
+
+module.exports = WorkerPool;

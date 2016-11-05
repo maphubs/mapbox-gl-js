@@ -1,17 +1,12 @@
 'use strict';
 
-var util = require('../../util/util');
-var StyleLayer = require('../style_layer');
+const StyleLayer = require('../style_layer');
+const SymbolBucket = require('../../data/bucket/symbol_bucket');
 
-function SymbolStyleLayer() {
-    StyleLayer.apply(this, arguments);
-}
+class SymbolStyleLayer extends StyleLayer {
 
-module.exports = SymbolStyleLayer;
-
-SymbolStyleLayer.prototype = util.inherit(StyleLayer, {
-    getLayoutValue: function(name, globalProperties, featureProperties) {
-        var value = StyleLayer.prototype.getLayoutValue.apply(this, arguments);
+    getLayoutValue(name, globalProperties, featureProperties) {
+        const value = super.getLayoutValue(name, globalProperties, featureProperties);
         if (value !== 'auto') {
             return value;
         }
@@ -26,4 +21,10 @@ SymbolStyleLayer.prototype = util.inherit(StyleLayer, {
             return value;
         }
     }
-});
+
+    createBucket(options) {
+        return new SymbolBucket(options);
+    }
+}
+
+module.exports = SymbolStyleLayer;

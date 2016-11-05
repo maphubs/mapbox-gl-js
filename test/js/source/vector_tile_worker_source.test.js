@@ -1,16 +1,12 @@
 'use strict';
 
-var test = require('tap').test;
-var VectorTileWorkerSource = require('../../../js/source/vector_tile_worker_source');
+const test = require('mapbox-gl-js-test').test;
+const VectorTileWorkerSource = require('../../../js/source/vector_tile_worker_source');
+const StyleLayerIndex = require('../../../js/style/style_layer_index');
 
-var styleLayers = {
-    getLayers: function () {},
-    getLayerFamilies: function () {}
-};
-
-test('abortTile', function(t) {
-    t.test('aborts pending request', function(t) {
-        var source = new VectorTileWorkerSource(null, styleLayers);
+test('abortTile', (t) => {
+    t.test('aborts pending request', (t) => {
+        const source = new VectorTileWorkerSource(null, new StyleLayerIndex());
 
         source.loadTile({
             source: 'source',
@@ -30,9 +26,9 @@ test('abortTile', function(t) {
     t.end();
 });
 
-test('removeTile', function(t) {
-    t.test('removes loaded tile', function(t) {
-        var source = new VectorTileWorkerSource(null, styleLayers);
+test('removeTile', (t) => {
+    t.test('removes loaded tile', (t) => {
+        const source = new VectorTileWorkerSource(null, new StyleLayerIndex());
 
         source.loaded = {
             source: {
@@ -52,11 +48,11 @@ test('removeTile', function(t) {
     t.end();
 });
 
-test('redoPlacement', function(t) {
+test('redoPlacement', (t) => {
 
-    t.test('on loaded tile', function(t) {
-        var source = new VectorTileWorkerSource(null, styleLayers);
-        var tile = {
+    t.test('on loaded tile', (t) => {
+        const source = new VectorTileWorkerSource(null, new StyleLayerIndex());
+        const tile = {
             redoPlacement: function(angle, pitch, showCollisionBoxes) {
                 t.equal(angle, 60);
                 t.equal(pitch, 30);
@@ -75,7 +71,7 @@ test('redoPlacement', function(t) {
             angle: 60,
             pitch: 30,
             showCollisionBoxes: false
-        }, function(err, result, transferables) {
+        }, (err, result, transferables) => {
             t.error(err);
             t.ok(result.isResult);
             t.ok(transferables.isTransferrables);
@@ -83,9 +79,9 @@ test('redoPlacement', function(t) {
         });
     });
 
-    t.test('on loading tile', function(t) {
-        var source = new VectorTileWorkerSource(null, styleLayers);
-        var tile = {};
+    t.test('on loading tile', (t) => {
+        const source = new VectorTileWorkerSource(null, new StyleLayerIndex());
+        const tile = {};
         source.loading = {mapbox: {3: tile}};
 
         source.redoPlacement({

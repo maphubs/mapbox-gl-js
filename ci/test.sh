@@ -17,10 +17,14 @@ rm -rf coverage .nyc_output
 
 # run linters
 npm run lint
+npm run lint-docs
 
 # build and run build tests
 npm run build-min
 npm run build-dev
+
+# run flow to check types
+npm run test-flow
 
 # run unit, render & query tests with coverage
 npm run test-cov

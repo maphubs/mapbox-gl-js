@@ -1,9 +1,6 @@
 'use strict';
 
-module.exports = KeyboardHandler;
-
-
-var panStep = 100,
+const panStep = 100,
     bearingStep = 15,
     pitchStep = 10;
 
@@ -21,32 +18,24 @@ var panStep = 100,
  * - `Shift+⇡`: Increase the pitch by 10 degrees.
  * - `Shift+⇣`: Decrease the pitch by 10 degrees.
  *
- * @class KeyboardHandler
  * @param {Map} map The Mapbox GL JS map to add the handler to.
  */
-function KeyboardHandler(map) {
-    this._map = map;
-    this._el = map.getCanvasContainer();
+class KeyboardHandler {
+    constructor(map) {
+        this._map = map;
+        this._el = map.getCanvasContainer();
 
-    this._onKeyDown = this._onKeyDown.bind(this);
-}
-
-function easeOut(t) {
-    return t * (2 - t);
-}
-
-KeyboardHandler.prototype = {
-
-    _enabled: false,
+        this._onKeyDown = this._onKeyDown.bind(this);
+    }
 
     /**
      * Returns a Boolean indicating whether keyboard interaction is enabled.
      *
      * @returns {boolean} `true` if keyboard interaction is enabled.
      */
-    isEnabled: function () {
-        return this._enabled;
-    },
+    isEnabled() {
+        return !!this._enabled;
+    }
 
     /**
      * Enables keyboard interaction.
@@ -54,11 +43,11 @@ KeyboardHandler.prototype = {
      * @example
      * map.keyboard.enable();
      */
-    enable: function () {
+    enable() {
         if (this.isEnabled()) return;
         this._el.addEventListener('keydown', this._onKeyDown, false);
         this._enabled = true;
-    },
+    }
 
     /**
      * Disables keyboard interaction.
@@ -66,20 +55,20 @@ KeyboardHandler.prototype = {
      * @example
      * map.keyboard.disable();
      */
-    disable: function () {
+    disable() {
         if (!this.isEnabled()) return;
         this._el.removeEventListener('keydown', this._onKeyDown);
         this._enabled = false;
-    },
+    }
 
-    _onKeyDown: function (e) {
+    _onKeyDown(e) {
         if (e.altKey || e.ctrlKey || e.metaKey) return;
 
-        var zoomDir = 0;
-        var bearingDir = 0;
-        var pitchDir = 0;
-        var xDir = 0;
-        var yDir = 0;
+        let zoomDir = 0;
+        let bearingDir = 0;
+        let pitchDir = 0;
+        let xDir = 0;
+        let yDir = 0;
 
         switch (e.keyCode) {
         case 61:
@@ -132,10 +121,10 @@ KeyboardHandler.prototype = {
             break;
         }
 
-        var map = this._map;
-        var zoom = map.getZoom();
+        const map = this._map;
+        const zoom = map.getZoom();
 
-        var easeOptions = {
+        const easeOptions = {
             duration: 300,
             delayEndEvents: 500,
             easing: easeOut,
@@ -149,4 +138,10 @@ KeyboardHandler.prototype = {
 
         map.easeTo(easeOptions, {originalEvent: e});
     }
-};
+}
+
+function easeOut(t) {
+    return t * (2 - t);
+}
+
+module.exports = KeyboardHandler;

@@ -1,53 +1,66 @@
 'use strict';
 
-var util = require('../util/util');
-var Buffer = require('./buffer');
-var VertexArrayObject = require('../render/vertex_array_object');
+const util = require('../util/util');
+const Buffer = require('./buffer');
+const ProgramConfiguration = require('./program_configuration');
+const VertexArrayObject = require('../render/vertex_array_object');
 
-module.exports = BufferGroup;
+class BufferGroup {
+    constructor(programInterface, layers, zoom, arrays) {
+        this.layoutVertexBuffer = new Buffer(arrays.layoutVertexArray,
+            programInterface.layoutVertexArrayType.serialize(), Buffer.BufferType.VERTEX);
 
-function BufferGroup(arrayGroup, arrayTypes) {
-    this.layoutVertexBuffer = new Buffer(arrayGroup.layoutVertexArray,
-        arrayTypes.layoutVertexArrayType, Buffer.BufferType.VERTEX);
-
-    if (arrayGroup.elementArray) {
-        this.elementBuffer = new Buffer(arrayGroup.elementArray,
-            arrayTypes.elementArrayType, Buffer.BufferType.ELEMENT);
-    }
-
-    var vaos = this.vaos = {};
-    var secondVaos;
-
-    if (arrayGroup.elementArray2) {
-        this.elementBuffer2 = new Buffer(arrayGroup.elementArray2,
-            arrayTypes.elementArrayType2, Buffer.BufferType.ELEMENT);
-        secondVaos = this.secondVaos = {};
-    }
-
-    this.paintVertexBuffers = util.mapObject(arrayGroup.paintVertexArrays, function(array, name) {
-        vaos[name] = new VertexArrayObject();
-        if (arrayGroup.elementArray2) {
-            secondVaos[name] = new VertexArrayObject();
+        if (arrays.elementArray) {
+            this.elementBuffer = new Buffer(arrays.elementArray,
+                programInterface.elementArrayType.serialize(), Buffer.BufferType.ELEMENT);
         }
-        return new Buffer(array, arrayTypes.paintVertexArrayTypes[name], Buffer.BufferType.VERTEX);
-    });
+
+        if (arrays.elementArray2) {
+            this.elementBuffer2 = new Buffer(arrays.elementArray2,
+                programInterface.elementArrayType2.serialize(), Buffer.BufferType.ELEMENT);
+        }
+
+        this.layerData = {};
+        for (const layer of layers) {
+            const array = arrays.paintVertexArrays[layer.id];
+            this.layerData[layer.id] = {
+                programConfiguration: ProgramConfiguration.createDynamic(
+                    programInterface.paintAttributes || [], layer, zoom),
+                paintVertexBuffer: new Buffer(array.array, array.type, Buffer.BufferType.VERTEX)
+            };
+        }
+
+        this.segments = arrays.segments;
+        this.segments2 = arrays.segments2;
+
+        for (const segments of [this.segments, this.segments2]) {
+            for (const segment of segments || []) {
+                segment.vaos = util.mapObject(arrays.paintVertexArrays, () => {
+                    return new VertexArrayObject();
+                });
+            }
+        }
+    }
+
+    destroy() {
+        this.layoutVertexBuffer.destroy();
+        if (this.elementBuffer) {
+            this.elementBuffer.destroy();
+        }
+        if (this.elementBuffer2) {
+            this.elementBuffer2.destroy();
+        }
+        for (const n in this.layerData) {
+            this.layerData[n].paintVertexBuffer.destroy();
+        }
+        for (const segments of [this.segments, this.segments2]) {
+            for (const segment of segments || []) {
+                for (const k in segment.vaos) {
+                    segment.vaos[k].destroy();
+                }
+            }
+        }
+    }
 }
 
-BufferGroup.prototype.destroy = function() {
-    this.layoutVertexBuffer.destroy();
-    if (this.elementBuffer) {
-        this.elementBuffer.destroy();
-    }
-    if (this.elementBuffer2) {
-        this.elementBuffer2.destroy();
-    }
-    for (var n in this.paintVertexBuffers) {
-        this.paintVertexBuffers[n].destroy();
-    }
-    for (var j in this.vaos) {
-        this.vaos[j].destroy();
-    }
-    for (var k in this.secondVaos) {
-        this.secondVaos[k].destroy();
-    }
-};
+module.exports = BufferGroup;

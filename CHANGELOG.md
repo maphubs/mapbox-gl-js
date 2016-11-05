@@ -7,7 +7,7 @@
  * Add `identity` function type #3274
  * Add depth testing for symbols with `'pitch-alignment': 'map'` #3243
  * Add `dataloading` events for styles and sources #3306
- * Add `Control` suffix to all controls :warning: BREAKING CHANGE :warning:
+ * Add `Control` suffix to all controls :warning: BREAKING CHANGE :warning: #3355
 
 #### Performance Improvements
 
@@ -29,6 +29,11 @@
   * Fix bug causing exceptions when symbol text has a trailing newline #3281
 
 ## 0.25.0 (September 29 2016)
+
+#### Breaking Changes
+
+  * `Evented#off` now require two arguments; omitting the second argument in order to unbind all listeners for an event
+     type is no longer supported, as it could cause unintended unbinding of internal listeners.
 
 #### New Features & Improvements
 

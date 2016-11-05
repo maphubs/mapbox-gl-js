@@ -1,22 +1,22 @@
 'use strict';
 
-var test = require('tap').test;
-var Light = require('../../../js/style/light');
-var spec = require('../../../js/style/style_spec').$root.light;
+const test = require('mapbox-gl-js-test').test;
+const Light = require('../../../js/style/light');
+const spec = require('../../../js/style/style_spec').light;
 
-test('Light', function(t) {
-    t.test('creates default light with no options', function (t) {
-        var light = new Light({});
+test('Light', (t) => {
+    t.test('creates default light with no options', (t) => {
+        const light = new Light({});
 
-        for (var key in spec) {
+        for (const key in spec) {
             t.deepEqual(light.getLightProperty(key), spec[key].default);
         }
 
         t.end();
     });
 
-    t.test('instantiates light correctly with options', function(t) {
-        var light = new Light({
+    t.test('instantiates light correctly with options', (t) => {
+        const light = new Light({
             anchor: 'map',
             position: [2, 30, 30],
             intensity: 1
@@ -33,8 +33,8 @@ test('Light', function(t) {
     t.end();
 });
 
-test('Light#set', function(t) {
-    var light = new Light({});
+test('Light#set', (t) => {
+    const light = new Light({});
 
     t.equal(light.getLightProperty('color'), '#ffffff');
 
@@ -45,11 +45,11 @@ test('Light#set', function(t) {
     t.end();
 });
 
-test('Light#getLight', function(t) {
-    var light = new Light({});
+test('Light#getLight', (t) => {
+    const light = new Light({});
 
-    var defaults = {};
-    for (var key in spec) {
+    const defaults = {};
+    for (const key in spec) {
         defaults[key] = spec[key].default;
     }
 
@@ -57,8 +57,8 @@ test('Light#getLight', function(t) {
     t.end();
 });
 
-test('Light#getLightProperty', function(t) {
-    var light = new Light({
+test('Light#getLightProperty', (t) => {
+    const light = new Light({
         intensity: {
             stops: [[16, 0.2], [17, 0.8]]
         },
@@ -73,8 +73,8 @@ test('Light#getLightProperty', function(t) {
     t.end();
 });
 
-test('Light#getLightValue', function(t) {
-    var light = new Light({
+test('Light#getLightValue', (t) => {
+    const light = new Light({
         intensity: {
             stops: [[16, 0.2], [17, 0.8]]
         },
@@ -89,8 +89,8 @@ test('Light#getLightValue', function(t) {
     t.end();
 });
 
-test('Light#setLight', function(t) {
-    var light = new Light({});
+test('Light#setLight', (t) => {
+    const light = new Light({});
     light.setLight({ color: 'red', "color-transition": { duration: 3000 }});
     light.updateLightTransitions({ transition: true }, null, createAnimationLoop());
 
@@ -99,8 +99,8 @@ test('Light#setLight', function(t) {
     t.end();
 });
 
-test('Light#recalculate', function(t) {
-    var light = new Light({
+test('Light#recalculate', (t) => {
+    const light = new Light({
         intensity: {
             stops: [[16, 0.2], [17, 0.8]]
         }

@@ -1,8 +1,8 @@
 'use strict';
 
-var util = require('../util/util');
+const util = require('../util/util');
 
-var sourceTypes = {
+const sourceTypes = {
     'vector': require('../source/vector_tile_source'),
     'raster': require('../source/raster_tile_source'),
     'arcgisraster': require('../source/arcgis_raster_tile_source'),
@@ -25,7 +25,7 @@ exports.create = function(id, source, dispatcher, eventedParent) {
     source.setEventedParent(eventedParent);
 
     if (source.id !== id) {
-        throw new Error('Expected Source id to be ' + id + ' instead of ' + source.id);
+        throw new Error(`Expected Source id to be ${id} instead of ${source.id}`);
     }
 
     util.bindAll(['load', 'abort', 'unload', 'serialize', 'prepare'], source);
@@ -123,9 +123,7 @@ exports.setType = function (name, type) {
  *
  * @class WorkerSource
  * @param {Actor} actor
- * @param {object} styleLayers An accessor provided by the Worker to get the current style layers and layer families.
- * @param {Function} styleLayers.getLayers
- * @param {Function} styleLayers.getLayerFamilies
+ * @param {StyleLayerIndex} layerIndex
  */
 
 /**
@@ -135,7 +133,7 @@ exports.setType = function (name, type) {
  *
  * @method
  * @name loadTile
- * @param {object} params Parameters sent by the main-thread Source identifying the tile to load.
+ * @param {Object} params Parameters sent by the main-thread Source identifying the tile to load.
  * @param {Function} callback
  * @memberof WorkerSource
  * @instance
@@ -147,7 +145,7 @@ exports.setType = function (name, type) {
  *
  * @method
  * @name reloadTile
- * @param {object} params
+ * @param {Object} params
  * @param {Function} callback
  * @memberof WorkerSource
  * @instance
@@ -157,7 +155,7 @@ exports.setType = function (name, type) {
  * Aborts loading a tile that is in progress.
  * @method
  * @name abortTile
- * @param {object} params
+ * @param {Object} params
  * @memberof WorkerSource
  * @instance
  */

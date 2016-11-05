@@ -1,46 +1,53 @@
 'use strict';
 
-var util = require('../util/util');
-var Bucket = require('../data/bucket');
-var FeatureIndex = require('../data/feature_index');
-var vt = require('vector-tile');
-var Protobuf = require('pbf');
-var GeoJSONFeature = require('../util/vectortile_to_geojson');
-var featureFilter = require('feature-filter');
-var CollisionTile = require('../symbol/collision_tile');
-var CollisionBoxArray = require('../symbol/collision_box');
-var SymbolInstancesArray = require('../symbol/symbol_instances');
-var SymbolQuadsArray = require('../symbol/symbol_quads');
-
-module.exports = Tile;
+const util = require('../util/util');
+const Bucket = require('../data/bucket');
+const FeatureIndex = require('../data/feature_index');
+const vt = require('vector-tile');
+const Protobuf = require('pbf');
+const GeoJSONFeature = require('../util/vectortile_to_geojson');
+const featureFilter = require('feature-filter');
+const CollisionTile = require('../symbol/collision_tile');
+const CollisionBoxArray = require('../symbol/collision_box');
+const SymbolInstancesArray = require('../symbol/symbol_instances');
+const SymbolQuadsArray = require('../symbol/symbol_quads');
 
 /**
  * A tile object is the combination of a Coordinate, which defines
  * its place, as well as a unique ID and data tracking for its content
  *
- * @param {Coordinate} coord
- * @param {number} size
  * @private
  */
-function Tile(coord, size, sourceMaxZoom) {
-    this.coord = coord;
-    this.uid = util.uniqueId();
-    this.uses = 0;
-    this.tileSize = size;
-    this.sourceMaxZoom = sourceMaxZoom;
-    this.buckets = {};
+class Tile {
+    /**
+     * @param {Coordinate} coord
+     * @param {number} size
+     */
+    constructor(coord, size, sourceMaxZoom) {
+        this.coord = coord;
+        this.uid = util.uniqueId();
+        this.uses = 0;
+        this.tileSize = size;
+        this.sourceMaxZoom = sourceMaxZoom;
+        this.buckets = {};
 
-    // `this.state` must be one of
-    //
-    // - `loading`:   Tile data is in the process of loading.
-    // - `loaded`:    Tile data has been loaded. Tile can be rendered.
-    // - `reloading`: Tile data has been loaded and is being updated. Tile can be rendered.
-    // - `unloaded`:  Tile data has been deleted.
-    // - `errored`:   Tile data was not loaded because of an error.
-    this.state = 'loading';
-}
+        // `this.state` must be one of
+        //
+        // - `loading`:   Tile data is in the process of loading.
+        // - `loaded`:    Tile data has been loaded. Tile can be rendered.
+        // - `reloading`: Tile data has been loaded and is being updated. Tile can be rendered.
+        // - `unloaded`:  Tile data has been deleted.
+        // - `errored`:   Tile data was not loaded because of an error.
+        this.state = 'loading';
+    }
 
-Tile.prototype = {
+    setAnimationLoop(animationLoop, t) {
+        this.animationLoopEndTime = t + Date.now();
+        if (this.animationLoopId !== undefined) {
+            animationLoop.cancel(this.animationLoopId);
+        }
+        this.animationLoopId = animationLoop.set(t);
+    }
 
     /**
      * Given a data object with a 'buffers' property, load it into
@@ -51,7 +58,7 @@ Tile.prototype = {
      * @returns {undefined}
      * @private
      */
-    loadVectorData: function(data, painter) {
+    loadVectorData(data, painter) {
         if (this.hasData()) {
             this.unloadVectorData(painter);
         }
@@ -73,8 +80,8 @@ Tile.prototype = {
         this.symbolInstancesArray = new SymbolInstancesArray(data.symbolInstancesArray);
         this.symbolQuadsArray = new SymbolQuadsArray(data.symbolQuadsArray);
         this.featureIndex = new FeatureIndex(data.featureIndex, this.rawTileData, this.collisionTile);
-        this.buckets = unserializeBuckets(data.buckets, painter.style);
-    },
+        this.buckets = Bucket.deserialize(data.buckets, painter.style);
+    }
 
     /**
      * Replace this tile's symbol buckets with fresh data.
@@ -83,14 +90,14 @@ Tile.prototype = {
      * @returns {undefined}
      * @private
      */
-    reloadSymbolData: function(data, style) {
+    reloadSymbolData(data, style) {
         if (this.state === 'unloaded') return;
 
         this.collisionTile = new CollisionTile(data.collisionTile, this.collisionBoxArray);
         this.featureIndex.setCollisionTile(this.collisionTile);
 
-        for (var id in this.buckets) {
-            var bucket = this.buckets[id];
+        for (const id in this.buckets) {
+            const bucket = this.buckets[id];
             if (bucket.type === 'symbol') {
                 bucket.destroy();
                 delete this.buckets[id];
@@ -98,29 +105,29 @@ Tile.prototype = {
         }
 
         // Add new symbol buckets
-        util.extend(this.buckets, unserializeBuckets(data.buckets, style));
-    },
+        util.extend(this.buckets, Bucket.deserialize(data.buckets, style));
+    }
 
     /**
      * Release any data or WebGL resources referenced by this tile.
      * @returns {undefined}
      * @private
      */
-    unloadVectorData: function() {
-        for (var id in this.buckets) {
+    unloadVectorData() {
+        for (const id in this.buckets) {
             this.buckets[id].destroy();
         }
+        this.buckets = {};
 
         this.collisionBoxArray = null;
         this.symbolQuadsArray = null;
         this.symbolInstancesArray = null;
         this.collisionTile = null;
         this.featureIndex = null;
-        this.buckets = null;
         this.state = 'unloaded';
-    },
+    }
 
-    redoPlacement: function(source) {
+    redoPlacement(source) {
         if (this.state !== 'loaded' || this.state === 'reloading') {
             this.redoWhenDone = true;
             return;
@@ -128,7 +135,8 @@ Tile.prototype = {
 
         this.state = 'reloading';
 
-        source.dispatcher.send('redo placement', {
+        source.dispatcher.send('redoPlacement', {
+            type: source.type,
             uid: this.uid,
             source: source.id,
             angle: source.map.transform.angle,
@@ -149,58 +157,39 @@ Tile.prototype = {
                 this.redoWhenDone = false;
             }
         }
-    },
+    }
 
-    getBucket: function(layer) {
-        return this.buckets && this.buckets[layer.ref || layer.id];
-    },
+    getBucket(layer) {
+        return this.buckets[layer.id];
+    }
 
-    querySourceFeatures: function(result, params) {
+    querySourceFeatures(result, params) {
         if (!this.rawTileData) return;
 
         if (!this.vtLayers) {
             this.vtLayers = new vt.VectorTile(new Protobuf(this.rawTileData)).layers;
         }
 
-        var layer = this.vtLayers._geojsonTileLayer || this.vtLayers[params.sourceLayer];
+        const layer = this.vtLayers._geojsonTileLayer || this.vtLayers[params.sourceLayer];
 
         if (!layer) return;
 
-        var filter = featureFilter(params.filter);
-        var coord = { z: this.coord.z, x: this.coord.x, y: this.coord.y };
+        const filter = featureFilter(params.filter);
+        const coord = { z: this.coord.z, x: this.coord.x, y: this.coord.y };
 
-        for (var i = 0; i < layer.length; i++) {
-            var feature = layer.feature(i);
+        for (let i = 0; i < layer.length; i++) {
+            const feature = layer.feature(i);
             if (filter(feature)) {
-                var geojsonFeature = new GeoJSONFeature(feature, this.coord.z, this.coord.x, this.coord.y);
+                const geojsonFeature = new GeoJSONFeature(feature, this.coord.z, this.coord.x, this.coord.y);
                 geojsonFeature.tile = coord;
                 result.push(geojsonFeature);
             }
         }
-    },
+    }
 
-    hasData: function() {
+    hasData() {
         return this.state === 'loaded' || this.state === 'reloading';
     }
-};
-
-function unserializeBuckets(input, style) {
-    // Guard against the case where the map's style has been set to null while
-    // this bucket has been parsing.
-    if (!style) return;
-
-    var output = {};
-    for (var i = 0; i < input.length; i++) {
-        var layer = style.getLayer(input[i].layerId);
-        if (!layer) continue;
-
-        var bucket = Bucket.create(util.extend({
-            layer: layer,
-            childLayers: input[i].childLayerIds
-                .map(style.getLayer.bind(style))
-                .filter(function(layer) { return layer; })
-        }, input[i]));
-        output[bucket.id] = bucket;
-    }
-    return output;
 }
+
+module.exports = Tile;

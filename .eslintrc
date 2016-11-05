@@ -1,5 +1,12 @@
 {
   "extends": "mourner",
+  "parser": "babel-eslint",
+  "parserOptions": {
+    "sourceType": "script",
+  },
+  "plugins": [
+    "flowtype"
+  ],
   "rules": {
     "array-bracket-spacing": "off",
     "block-scoped-var": "error",
@@ -8,10 +15,15 @@
     "key-spacing": "off",
     "no-eq-null": "off",
     "no-new": "off",
+    "no-var": "error",
     "no-warning-comments": "error",
     "object-curly-spacing": "off",
+    "prefer-arrow-callback": "error",
+    "prefer-const": "error",
+    "prefer-template": "error",
     "quotes": "off",
     "space-before-function-paren": "off",
+    "template-curly-spacing": "error"
   },
   "env": {
     "es6": true,

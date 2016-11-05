@@ -1,49 +1,48 @@
 'use strict';
 
-var DOM = require('../../util/dom');
-var LngLatBounds = require('../../geo/lng_lat_bounds');
-var util = require('../../util/util');
-var window = require('../../util/window');
-
-module.exports = BoxZoomHandler;
+const DOM = require('../../util/dom');
+const LngLatBounds = require('../../geo/lng_lat_bounds');
+const util = require('../../util/util');
+const window = require('../../util/window');
 
 /**
  * The `BoxZoomHandler` allows the user to zoom the map to fit within a bounding box.
  * The bounding box is defined by clicking and holding `shift` while dragging the cursor.
  *
- * @class BoxZoomHandler
  * @param {Map} map The Mapbox GL JS map to add the handler to.
  */
-function BoxZoomHandler(map) {
-    this._map = map;
-    this._el = map.getCanvasContainer();
-    this._container = map.getContainer();
+class BoxZoomHandler {
 
-    util.bindHandlers(this);
-}
+    constructor(map) {
+        this._map = map;
+        this._el = map.getCanvasContainer();
+        this._container = map.getContainer();
 
-BoxZoomHandler.prototype = {
-
-    _enabled: false,
-    _active: false,
+        util.bindAll([
+            '_onMouseDown',
+            '_onMouseMove',
+            '_onMouseUp',
+            '_onKeyDown'
+        ], this);
+    }
 
     /**
      * Returns a Boolean indicating whether the "box zoom" interaction is enabled.
      *
      * @returns {boolean} `true` if the "box zoom" interaction is enabled.
      */
-    isEnabled: function () {
-        return this._enabled;
-    },
+    isEnabled() {
+        return !!this._enabled;
+    }
 
     /**
      * Returns a Boolean indicating whether the "box zoom" interaction is active, i.e. currently being used.
      *
      * @returns {boolean} `true` if the "box zoom" interaction is active.
      */
-    isActive: function () {
-        return this._active;
-    },
+    isActive() {
+        return !!this._active;
+    }
 
     /**
      * Enables the "box zoom" interaction.
@@ -51,11 +50,11 @@ BoxZoomHandler.prototype = {
      * @example
      *   map.boxZoom.enable();
      */
-    enable: function () {
+    enable() {
         if (this.isEnabled()) return;
         this._el.addEventListener('mousedown', this._onMouseDown, false);
         this._enabled = true;
-    },
+    }
 
     /**
      * Disables the "box zoom" interaction.
@@ -63,13 +62,13 @@ BoxZoomHandler.prototype = {
      * @example
      *   map.boxZoom.disable();
      */
-    disable: function () {
+    disable() {
         if (!this.isEnabled()) return;
         this._el.removeEventListener('mousedown', this._onMouseDown);
         this._enabled = false;
-    },
+    }
 
-    _onMouseDown: function (e) {
+    _onMouseDown(e) {
         if (!(e.shiftKey && e.button === 0)) return;
 
         window.document.addEventListener('mousemove', this._onMouseMove, false);
@@ -79,10 +78,10 @@ BoxZoomHandler.prototype = {
         DOM.disableDrag();
         this._startPos = DOM.mousePos(this._el, e);
         this._active = true;
-    },
+    }
 
-    _onMouseMove: function (e) {
-        var p0 = this._startPos,
+    _onMouseMove(e) {
+        const p0 = this._startPos,
             p1 = DOM.mousePos(this._el, e);
 
         if (!this._box) {
@@ -91,21 +90,21 @@ BoxZoomHandler.prototype = {
             this._fireEvent('boxzoomstart', e);
         }
 
-        var minX = Math.min(p0.x, p1.x),
+        const minX = Math.min(p0.x, p1.x),
             maxX = Math.max(p0.x, p1.x),
             minY = Math.min(p0.y, p1.y),
             maxY = Math.max(p0.y, p1.y);
 
-        DOM.setTransform(this._box, 'translate(' + minX + 'px,' + minY + 'px)');
+        DOM.setTransform(this._box, `translate(${minX}px,${minY}px)`);
 
-        this._box.style.width = (maxX - minX) + 'px';
-        this._box.style.height = (maxY - minY) + 'px';
-    },
+        this._box.style.width = `${maxX - minX}px`;
+        this._box.style.height = `${maxY - minY}px`;
+    }
 
-    _onMouseUp: function (e) {
+    _onMouseUp(e) {
         if (e.button !== 0) return;
 
-        var p0 = this._startPos,
+        const p0 = this._startPos,
             p1 = DOM.mousePos(this._el, e),
             bounds = new LngLatBounds()
                 .extend(this._map.unproject(p0))
@@ -120,16 +119,16 @@ BoxZoomHandler.prototype = {
                 .fitBounds(bounds, {linear: true})
                 .fire('boxzoomend', { originalEvent: e, boxZoomBounds: bounds });
         }
-    },
+    }
 
-    _onKeyDown: function (e) {
+    _onKeyDown(e) {
         if (e.keyCode === 27) {
             this._finish();
             this._fireEvent('boxzoomcancel', e);
         }
-    },
+    }
 
-    _finish: function () {
+    _finish() {
         this._active = false;
 
         window.document.removeEventListener('mousemove', this._onMouseMove, false);
@@ -144,12 +143,14 @@ BoxZoomHandler.prototype = {
         }
 
         DOM.enableDrag();
-    },
+    }
 
-    _fireEvent: function (type, e) {
+    _fireEvent(type, e) {
         return this._map.fire(type, { originalEvent: e });
     }
-};
+}
+
+module.exports = BoxZoomHandler;
 
 /**
  * @typedef {Object} MapBoxZoomEvent

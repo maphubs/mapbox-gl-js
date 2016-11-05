@@ -1,12 +1,12 @@
 'use strict';
 
-var test = require('tap').test;
-var proxyquire = require('proxyquire');
-var Actor = require('../../../js/util/actor');
+const test = require('mapbox-gl-js-test').test;
+const proxyquire = require('proxyquire');
+const Actor = require('../../../js/util/actor');
 
-test('Actor', function (t) {
-    t.test('forwards resopnses to correct callback', function (t) {
-        var WebWorker = proxyquire('../../../js/util/web_worker', {
+test('Actor', (t) => {
+    t.test('forwards resopnses to correct callback', (t) => {
+        const WebWorker = proxyquire('../../../js/util/web_worker', {
             '../source/worker': function Worker(self) {
                 this.self = self;
                 this.actor = new Actor(self, this);
@@ -16,32 +16,32 @@ test('Actor', function (t) {
             }
         });
 
-        var worker = new WebWorker();
+        const worker = new WebWorker();
 
-        var m1 = new Actor(worker, {}, 'map-1');
-        var m2 = new Actor(worker, {}, 'map-2');
+        const m1 = new Actor(worker, {}, 'map-1');
+        const m2 = new Actor(worker, {}, 'map-2');
 
         t.plan(4);
-        m1.send('test', { value: 1729 }, function (err, response) {
+        m1.send('test', { value: 1729 }, (err, response) => {
             t.error(err);
             t.same(response, { value: 1729 });
         });
-        m2.send('test', { value: 4104 }, function (err, response) {
+        m2.send('test', { value: 4104 }, (err, response) => {
             t.error(err);
             t.same(response, { value: 4104 });
         });
     });
 
-    t.test('targets worker-initiated messages to correct map instance', function (t) {
-        var workerActor;
+    t.test('targets worker-initiated messages to correct map instance', (t) => {
+        let workerActor;
 
-        var WebWorker = proxyquire('../../../js/util/web_worker', {
+        const WebWorker = proxyquire('../../../js/util/web_worker', {
             '../source/worker': function Worker(self) {
                 this.self = self;
                 this.actor = workerActor = new Actor(self, this);
             }
         });
-        var worker = new WebWorker();
+        const worker = new WebWorker();
 
         new Actor(worker, {
             test: function () { t.end(); }
@@ -53,11 +53,11 @@ test('Actor', function (t) {
             }
         }, 'map-2');
 
-        workerActor.send('test', {}, function () {}, null, 'map-1');
+        workerActor.send('test', {}, () => {}, null, 'map-1');
     });
 
-    t.test('#remove unbinds event listener', function (t) {
-        var actor = new Actor({
+    t.test('#remove unbinds event listener', (t) => {
+        const actor = new Actor({
             addEventListener: function (type, callback, useCapture) {
                 this._addEventListenerArgs = [type, callback, useCapture];
             },

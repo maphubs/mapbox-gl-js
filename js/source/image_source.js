@@ -1,17 +1,16 @@
 'use strict';
 
-var util = require('../util/util');
-var TileCoord = require('./tile_coord');
-var LngLat = require('../geo/lng_lat');
-var Point = require('point-geometry');
-var Evented = require('../util/evented');
-var ajax = require('../util/ajax');
-var EXTENT = require('../data/bucket').EXTENT;
-var RasterBoundsArray = require('../render/draw_raster').RasterBoundsArray;
-var Buffer = require('../data/buffer');
-var VertexArrayObject = require('../render/vertex_array_object');
-
-module.exports = ImageSource;
+const util = require('../util/util');
+const window = require('../util/window');
+const TileCoord = require('./tile_coord');
+const LngLat = require('../geo/lng_lat');
+const Point = require('point-geometry');
+const Evented = require('../util/evented');
+const ajax = require('../util/ajax');
+const EXTENT = require('../data/extent');
+const RasterBoundsArray = require('../data/raster_bounds_array');
+const Buffer = require('../data/buffer');
+const VertexArrayObject = require('../render/vertex_array_object');
 
 /**
  * A data source containing an image.
@@ -43,38 +42,51 @@ module.exports = ImageSource;
  * map.removeSource('some id');  // remove
  * @see [Add an image](https://www.mapbox.com/mapbox-gl-js/example/image-on-a-map/)
  */
-function ImageSource(id, options, dispatcher, eventedParent) {
-    this.id = id;
-    this.dispatcher = dispatcher;
-    this.url = options.url;
-    this.coordinates = options.coordinates;
+class ImageSource extends Evented {
 
-    this.setEventedParent(eventedParent);
-    this.fire('dataloading', {dataType: 'source'});
-    ajax.getImage(options.url, function(err, image) {
-        if (err) return this.fire('error', {error: err});
+    constructor(id, options, dispatcher, eventedParent) {
+        super();
+        this.id = id;
+        this.dispatcher = dispatcher;
+        this.coordinates = options.coordinates;
 
-        this.image = image;
-        this._loaded = true;
+        this.minzoom = 0;
+        this.maxzoom = 22;
+        this.tileSize = 512;
+
+        this.setEventedParent(eventedParent);
+        this.fire('dataloading', {dataType: 'source'});
+
+        this._load(options);
+    }
+
+    _load(options) {
+        this.url = options.url;
+
+        ajax.getImage(options.url, (err, image) => {
+            if (err) return this.fire('error', {error: err});
+
+            this.image = image;
+
+            this._finishLoading();
+        });
+    }
+
+    _finishLoading() {
         this.fire('data', {dataType: 'source'});
         this.fire('source.load');
 
         if (this.map) {
-            this.setCoordinates(options.coordinates);
+            this.setCoordinates(this.coordinates);
         }
-    }.bind(this));
-}
+    }
 
-ImageSource.prototype = util.inherit(Evented, /** @lends ImageSource.prototype */ {
-    minzoom: 0,
-    maxzoom: 22,
-    tileSize: 512,
-    onAdd: function(map) {
+    onAdd(map) {
         this.map = map;
         if (this.image) {
             this.setCoordinates(this.coordinates);
         }
-    },
+    }
 
     /**
      * Sets the image's coordinates and re-renders the map.
@@ -85,26 +97,26 @@ ImageSource.prototype = util.inherit(Evented, /** @lends ImageSource.prototype *
      *   They do not have to represent a rectangle.
      * @returns {ImageSource} this
      */
-    setCoordinates: function(coordinates) {
+    setCoordinates(coordinates) {
         this.coordinates = coordinates;
 
         // Calculate which mercator tile is suitable for rendering the video in
         // and create a buffer with the corner coordinates. These coordinates
         // may be outside the tile, because raster tiles aren't clipped when rendering.
 
-        var map = this.map;
-        var cornerZ0Coords = coordinates.map(function(coord) {
+        const map = this.map;
+        const cornerZ0Coords = coordinates.map((coord) => {
             return map.transform.locationCoordinate(LngLat.convert(coord)).zoomTo(0);
         });
 
-        var centerCoord = this.centerCoord = util.getCoordinatesCenter(cornerZ0Coords);
+        const centerCoord = this.centerCoord = util.getCoordinatesCenter(cornerZ0Coords);
         centerCoord.column = Math.round(centerCoord.column);
         centerCoord.row = Math.round(centerCoord.row);
 
         this.minzoom = this.maxzoom = centerCoord.zoom;
         this.coord = new TileCoord(centerCoord.zoom, centerCoord.column, centerCoord.row);
-        this._tileCoords = cornerZ0Coords.map(function(coord) {
-            var zoomedCoord = coord.zoomTo(centerCoord.zoom);
+        this._tileCoords = cornerZ0Coords.map((coord) => {
+            const zoomedCoord = coord.zoomTo(centerCoord.zoom);
             return new Point(
                 Math.round((zoomedCoord.column - centerCoord.column) * EXTENT),
                 Math.round((zoomedCoord.row - centerCoord.row) * EXTENT));
@@ -112,13 +124,12 @@ ImageSource.prototype = util.inherit(Evented, /** @lends ImageSource.prototype *
 
         this.fire('data', {dataType: 'source'});
         return this;
-    },
+    }
 
-    _setTile: function (tile) {
-        this._prepared = false;
+    _setTile(tile) {
         this.tile = tile;
-        var maxInt16 = 32767;
-        var array = new RasterBoundsArray();
+        const maxInt16 = 32767;
+        const array = new RasterBoundsArray();
         array.emplaceBack(this._tileCoords[0].x, this._tileCoords[0].y, 0, 0);
         array.emplaceBack(this._tileCoords[1].x, this._tileCoords[1].y, maxInt16, 0);
         array.emplaceBack(this._tileCoords[3].x, this._tileCoords[3].y, 0, maxInt16);
@@ -126,19 +137,18 @@ ImageSource.prototype = util.inherit(Evented, /** @lends ImageSource.prototype *
 
         this.tile.buckets = {};
 
-        this.tile.boundsBuffer = new Buffer(array.serialize(), RasterBoundsArray.serialize(), Buffer.BufferType.VERTEX);
+        this.tile.boundsBuffer = Buffer.fromStructArray(array, Buffer.BufferType.VERTEX);
         this.tile.boundsVAO = new VertexArrayObject();
-        this.tile.state = 'loaded';
-    },
+    }
 
-    prepare: function() {
-        if (!this.tile || !this._loaded || !this.image || !this.image.complete) return;
+    prepare() {
+        if (!this.tile || !this.image) return;
         this._prepareImage(this.map.painter.gl, this.image);
-    },
+    }
 
-    _prepareImage: function (gl, image) {
-        if (!this._prepared) {
-            this._prepared = true;
+    _prepareImage(gl, image) {
+        if (this.tile.state !== 'loaded') {
+            this.tile.state = 'loaded';
             this.tile.texture = gl.createTexture();
             gl.bindTexture(gl.TEXTURE_2D, this.tile.texture);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -146,13 +156,13 @@ ImageSource.prototype = util.inherit(Evented, /** @lends ImageSource.prototype *
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
-        } else {
+        } else if (image instanceof window.HTMLVideoElement) {
             gl.bindTexture(gl.TEXTURE_2D, this.tile.texture);
             gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, image);
         }
-    },
+    }
 
-    loadTile: function(tile, callback) {
+    loadTile(tile, callback) {
         // We have a single tile -- whoose coordinates are this.coord -- that
         // covers the image we want to render.  If that's the one being
         // requested, set it up with the image; otherwise, mark the tile as
@@ -164,13 +174,15 @@ ImageSource.prototype = util.inherit(Evented, /** @lends ImageSource.prototype *
             tile.state = 'errored';
             callback(null);
         }
-    },
+    }
 
-    serialize: function() {
+    serialize() {
         return {
             type: 'image',
             urls: this.url,
             coordinates: this.coordinates
         };
     }
-});
+}
+
+module.exports = ImageSource;

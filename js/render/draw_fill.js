@@ -1,31 +1,29 @@
 'use strict';
 
-var setPattern = require('./set_pattern');
+const pattern = require('./pattern');
 
-module.exports = draw;
+module.exports = drawFill;
 
-function draw(painter, sourceCache, layer, coords) {
-    var gl = painter.gl;
+function drawFill(painter, sourceCache, layer, coords) {
+    const gl = painter.gl;
     gl.enable(gl.STENCIL_TEST);
 
-    var isOpaque = (
+    const isOpaque =
         !layer.paint['fill-pattern'] &&
         layer.isPaintValueFeatureConstant('fill-color') &&
         layer.isPaintValueFeatureConstant('fill-opacity') &&
         layer.paint['fill-color'][3] === 1 &&
-        layer.paint['fill-opacity'] === 1
-    );
+        layer.paint['fill-opacity'] === 1;
 
     // Draw fill
     if (painter.isOpaquePass === isOpaque) {
         // Once we switch to earcut drawing we can pull most of the WebGL setup
         // outside of this coords loop.
         painter.setDepthSublayer(1);
-        for (var i = 0; i < coords.length; i++) {
-            drawFill(painter, sourceCache, layer, coords[i]);
-        }
+        drawFillTiles(painter, sourceCache, layer, coords, drawFillTile);
     }
 
+    // Draw stroke
     if (!painter.isOpaquePass && layer.paint['fill-antialias']) {
         painter.lineWidth(2);
         painter.depthMask(false);
@@ -39,109 +37,69 @@ function draw(painter, sourceCache, layer, coords) {
         // the current shape, some pixels from the outline stroke overlapped
         // the (non-antialiased) fill.
         painter.setDepthSublayer(layer.getPaintProperty('fill-outline-color') ? 2 : 0);
+        drawFillTiles(painter, sourceCache, layer, coords, drawStrokeTile);
+    }
+}
 
-        for (var j = 0; j < coords.length; j++) {
-            drawStroke(painter, sourceCache, layer, coords[j]);
+function drawFillTiles(painter, sourceCache, layer, coords, drawFn) {
+    let firstTile = true;
+    for (const coord of coords) {
+        const tile = sourceCache.getTile(coord);
+        const bucket = tile.getBucket(layer);
+        if (!bucket) continue;
+
+        painter.enableTileClippingMask(coord);
+        drawFn(painter, sourceCache, layer, tile, coord, bucket.buffers, firstTile);
+        firstTile = false;
+    }
+}
+
+function drawFillTile(painter, sourceCache, layer, tile, coord, buffers, firstTile) {
+    const gl = painter.gl;
+    const layerData = buffers.layerData[layer.id];
+
+    const program = setFillProgram('fill', layer.paint['fill-pattern'], painter, layerData, layer, tile, coord, firstTile);
+
+    for (const segment of buffers.segments) {
+        segment.vaos[layer.id].bind(gl, program, buffers.layoutVertexBuffer, buffers.elementBuffer, layerData.paintVertexBuffer, segment.vertexOffset);
+        gl.drawElements(gl.TRIANGLES, segment.primitiveLength * 3, gl.UNSIGNED_SHORT, segment.primitiveOffset * 3 * 2);
+    }
+}
+
+function drawStrokeTile(painter, sourceCache, layer, tile, coord, buffers, firstTile) {
+    const gl = painter.gl;
+    const layerData = buffers.layerData[layer.id];
+    const usePattern = layer.paint['fill-pattern'] && !layer.getPaintProperty('fill-outline-color');
+
+    const program = setFillProgram('fillOutline', usePattern, painter, layerData, layer, tile, coord, firstTile);
+    gl.uniform2f(program.u_world, gl.drawingBufferWidth, gl.drawingBufferHeight);
+
+    for (const segment of buffers.segments2) {
+        segment.vaos[layer.id].bind(gl, program, buffers.layoutVertexBuffer, buffers.elementBuffer2, layerData.paintVertexBuffer, segment.vertexOffset);
+        gl.drawElements(gl.LINES, segment.primitiveLength * 2, gl.UNSIGNED_SHORT, segment.primitiveOffset * 2 * 2);
+    }
+}
+
+function setFillProgram(programId, usePattern, painter, layerData, layer, tile, coord, firstTile) {
+    let program;
+    const prevProgram = painter.currentProgram;
+    if (!usePattern) {
+        program = painter.useProgram(programId, layerData.programConfiguration);
+        if (firstTile || program !== prevProgram) {
+            layerData.programConfiguration.setUniforms(painter.gl, program, layer, {zoom: painter.transform.zoom});
         }
-    }
-}
-
-function drawFill(painter, sourceCache, layer, coord) {
-    var tile = sourceCache.getTile(coord);
-    var bucket = tile.getBucket(layer);
-    if (!bucket) return;
-    var bufferGroups = bucket.bufferGroups.fill;
-    if (!bufferGroups) return;
-
-    var gl = painter.gl;
-
-    var image = layer.paint['fill-pattern'];
-    var program;
-
-    if (!image) {
-
-        var programOptions = bucket.paintAttributes.fill[layer.id];
-        program = painter.useProgram(
-            'fill',
-            programOptions.defines,
-            programOptions.vertexPragmas,
-            programOptions.fragmentPragmas
-        );
-        bucket.setUniforms(gl, 'fill', program, layer, {zoom: painter.transform.zoom});
-
     } else {
-        // Draw texture fill
-        program = painter.useProgram('fillPattern');
-        setPattern(image, tile, coord, painter, program, false);
-        gl.uniform1f(program.u_opacity, layer.paint['fill-opacity']);
-
-        gl.activeTexture(gl.TEXTURE0);
-        painter.spriteAtlas.bind(gl, true);
+        program = painter.useProgram(`${programId}Pattern`);
+        painter.gl.uniform1f(program.u_opacity, layer.paint['fill-opacity']);
+        if (firstTile || program !== prevProgram) {
+            pattern.prepare(layer.paint['fill-pattern'], painter, program);
+        }
+        pattern.setTile(tile, painter, program);
     }
-
-    gl.uniformMatrix4fv(program.u_matrix, false, painter.translatePosMatrix(
-        coord.posMatrix,
-        tile,
+    painter.gl.uniformMatrix4fv(program.u_matrix, false, painter.translatePosMatrix(
+        coord.posMatrix, tile,
         layer.paint['fill-translate'],
         layer.paint['fill-translate-anchor']
     ));
-
-    painter.enableTileClippingMask(coord);
-
-    for (var i = 0; i < bufferGroups.length; i++) {
-        var group = bufferGroups[i];
-        group.vaos[layer.id].bind(gl, program, group.layoutVertexBuffer, group.elementBuffer, group.paintVertexBuffers[layer.id]);
-        gl.drawElements(gl.TRIANGLES, group.elementBuffer.length, gl.UNSIGNED_SHORT, 0);
-    }
-}
-
-function drawStroke(painter, sourceCache, layer, coord) {
-    var tile = sourceCache.getTile(coord);
-    var bucket = tile.getBucket(layer);
-    if (!bucket) return;
-    var bufferGroups = bucket.bufferGroups.fill;
-    if (!bufferGroups) return;
-
-    var gl = painter.gl;
-
-    var image = layer.paint['fill-pattern'];
-    var isOutlineColorDefined = layer.getPaintProperty('fill-outline-color');
-    var program;
-
-    if (image && !isOutlineColorDefined) {
-        program = painter.useProgram('fillOutlinePattern');
-        gl.uniform2f(program.u_world, gl.drawingBufferWidth, gl.drawingBufferHeight);
-
-    } else {
-        var programOptions = bucket.paintAttributes.fill[layer.id];
-        program = painter.useProgram(
-            'fillOutline',
-            programOptions.defines,
-            programOptions.vertexPragmas,
-            programOptions.fragmentPragmas
-        );
-        gl.uniform2f(program.u_world, gl.drawingBufferWidth, gl.drawingBufferHeight);
-        bucket.setUniforms(gl, 'fill', program, layer, {zoom: painter.transform.zoom});
-    }
-
-    gl.uniform1f(program.u_opacity, layer.paint['fill-opacity']);
-
-    gl.uniformMatrix4fv(program.u_matrix, false, painter.translatePosMatrix(
-        coord.posMatrix,
-        tile,
-        layer.paint['fill-translate'],
-        layer.paint['fill-translate-anchor']
-    ));
-
-    if (image) {
-        setPattern(image, tile, coord, painter, program, false);
-    }
-
-    painter.enableTileClippingMask(coord);
-
-    for (var k = 0; k < bufferGroups.length; k++) {
-        var group = bufferGroups[k];
-        group.secondVaos[layer.id].bind(gl, program, group.layoutVertexBuffer, group.elementBuffer2, group.paintVertexBuffers[layer.id]);
-        gl.drawElements(gl.LINES, group.elementBuffer2.length * 2, gl.UNSIGNED_SHORT, 0);
-    }
+    return program;
 }

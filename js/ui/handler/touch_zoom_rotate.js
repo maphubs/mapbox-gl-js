@@ -1,45 +1,42 @@
 'use strict';
 
-var DOM = require('../../util/dom');
-var util = require('../../util/util');
-var window = require('../../util/window');
+const DOM = require('../../util/dom');
+const util = require('../../util/util');
+const window = require('../../util/window');
 
-module.exports = TouchZoomRotateHandler;
-
-var inertiaLinearity = 0.15,
+const inertiaLinearity = 0.15,
     inertiaEasing = util.bezier(0, 0, inertiaLinearity, 1),
     inertiaDeceleration = 12, // scale / s^2
     inertiaMaxSpeed = 2.5, // scale / s
     significantScaleThreshold = 0.15,
     significantRotateThreshold = 4;
 
-
 /**
  * The `TouchZoomRotateHandler` allows the user to zoom and rotate the map by
  * pinching on a touchscreen.
  *
- * @class TouchZoomRotateHandler
  * @param {Map} map The Mapbox GL JS map to add the handler to.
  */
-function TouchZoomRotateHandler(map) {
-    this._map = map;
-    this._el = map.getCanvasContainer();
+class TouchZoomRotateHandler {
+    constructor(map) {
+        this._map = map;
+        this._el = map.getCanvasContainer();
 
-    util.bindHandlers(this);
-}
-
-TouchZoomRotateHandler.prototype = {
-
-    _enabled: false,
+        util.bindAll([
+            '_onStart',
+            '_onMove',
+            '_onEnd'
+        ], this);
+    }
 
     /**
      * Returns a Boolean indicating whether the "pinch to rotate and zoom" interaction is enabled.
      *
      * @returns {boolean} `true` if the "pinch to rotate and zoom" interaction is enabled.
      */
-    isEnabled: function () {
-        return this._enabled;
-    },
+    isEnabled() {
+        return !!this._enabled;
+    }
 
     /**
      * Enables the "pinch to rotate and zoom" interaction.
@@ -47,11 +44,11 @@ TouchZoomRotateHandler.prototype = {
      * @example
      *   map.touchZoomRotate.enable();
      */
-    enable: function () {
+    enable() {
         if (this.isEnabled()) return;
         this._el.addEventListener('touchstart', this._onStart, false);
         this._enabled = true;
-    },
+    }
 
     /**
      * Disables the "pinch to rotate and zoom" interaction.
@@ -59,11 +56,11 @@ TouchZoomRotateHandler.prototype = {
      * @example
      *   map.touchZoomRotate.disable();
      */
-    disable: function () {
+    disable() {
         if (!this.isEnabled()) return;
         this._el.removeEventListener('touchstart', this._onStart);
         this._enabled = false;
-    },
+    }
 
     /**
      * Disables the "pinch to rotate" interaction, leaving the "pinch to zoom"
@@ -72,9 +69,9 @@ TouchZoomRotateHandler.prototype = {
      * @example
      *   map.touchZoomRotate.disableRotation();
      */
-    disableRotation: function() {
+    disableRotation() {
         this._rotationDisabled = true;
-    },
+    }
 
     /**
      * Enables the "pinch to rotate" interaction.
@@ -83,14 +80,14 @@ TouchZoomRotateHandler.prototype = {
      *   map.touchZoomRotate.enable();
      *   map.touchZoomRotate.enableRotation();
      */
-    enableRotation: function() {
+    enableRotation() {
         this._rotationDisabled = false;
-    },
+    }
 
-    _onStart: function (e) {
+    _onStart(e) {
         if (e.touches.length !== 2) return;
 
-        var p0 = DOM.mousePos(this._el, e.touches[0]),
+        const p0 = DOM.mousePos(this._el, e.touches[0]),
             p1 = DOM.mousePos(this._el, e.touches[1]);
 
         this._startVec = p0.sub(p1);
@@ -101,12 +98,12 @@ TouchZoomRotateHandler.prototype = {
 
         window.document.addEventListener('touchmove', this._onMove, false);
         window.document.addEventListener('touchend', this._onEnd, false);
-    },
+    }
 
-    _onMove: function (e) {
+    _onMove(e) {
         if (e.touches.length !== 2) return;
 
-        var p0 = DOM.mousePos(this._el, e.touches[0]),
+        const p0 = DOM.mousePos(this._el, e.touches[0]),
             p1 = DOM.mousePos(this._el, e.touches[1]),
             p = p0.add(p1).div(2),
             vec = p0.sub(p1),
@@ -117,7 +114,7 @@ TouchZoomRotateHandler.prototype = {
         // Determine 'intent' by whichever threshold is surpassed first,
         // then keep that state for the duration of this gesture.
         if (!this._gestureIntent) {
-            var scalingSignificantly = (Math.abs(1 - scale) > significantScaleThreshold),
+            const scalingSignificantly = (Math.abs(1 - scale) > significantScaleThreshold),
                 rotatingSignificantly = (Math.abs(bearing) > significantRotateThreshold);
 
             if (rotatingSignificantly) {
@@ -133,7 +130,7 @@ TouchZoomRotateHandler.prototype = {
             }
 
         } else {
-            var param = { duration: 0, around: map.unproject(p) };
+            const param = { duration: 0, around: map.unproject(p) };
 
             if (this._gestureIntent === 'rotate') {
                 param.bearing = this._startBearing + bearing;
@@ -150,14 +147,14 @@ TouchZoomRotateHandler.prototype = {
         }
 
         e.preventDefault();
-    },
+    }
 
-    _onEnd: function (e) {
+    _onEnd(e) {
         window.document.removeEventListener('touchmove', this._onMove);
         window.document.removeEventListener('touchend', this._onEnd);
         this._drainInertiaBuffer();
 
-        var inertia = this._inertia,
+        const inertia = this._inertia,
             map = this._map;
 
         if (inertia.length < 2) {
@@ -165,7 +162,7 @@ TouchZoomRotateHandler.prototype = {
             return;
         }
 
-        var last = inertia[inertia.length - 1],
+        const last = inertia[inertia.length - 1],
             first = inertia[0],
             lastScale = map.transform.scaleZoom(this._startScale * last[1]),
             firstScale = map.transform.scaleZoom(this._startScale * first[1]),
@@ -179,7 +176,7 @@ TouchZoomRotateHandler.prototype = {
         }
 
         // calculate scale/s speed and adjust for increased initial animation speed when easing
-        var speed = scaleOffset * inertiaLinearity / scaleDuration; // scale/s
+        let speed = scaleOffset * inertiaLinearity / scaleDuration; // scale/s
 
         if (Math.abs(speed) > inertiaMaxSpeed) {
             if (speed > 0) {
@@ -189,8 +186,8 @@ TouchZoomRotateHandler.prototype = {
             }
         }
 
-        var duration = Math.abs(speed / (inertiaDeceleration * inertiaLinearity)) * 1000,
-            targetScale = lastScale + speed * duration / 2000;
+        const duration = Math.abs(speed / (inertiaDeceleration * inertiaLinearity)) * 1000;
+        let targetScale = lastScale + speed * duration / 2000;
 
         if (targetScale < 0) {
             targetScale = 0;
@@ -202,13 +199,15 @@ TouchZoomRotateHandler.prototype = {
             easing: inertiaEasing,
             around: map.unproject(p)
         }, { originalEvent: e });
-    },
+    }
 
-    _drainInertiaBuffer: function() {
-        var inertia = this._inertia,
+    _drainInertiaBuffer() {
+        const inertia = this._inertia,
             now = Date.now(),
             cutoff = 160; // msec
 
         while (inertia.length > 2 && now - inertia[0][0] > cutoff) inertia.shift();
     }
-};
+}
+
+module.exports = TouchZoomRotateHandler;

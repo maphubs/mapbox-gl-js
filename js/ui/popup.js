@@ -1,18 +1,20 @@
 'use strict';
 
-module.exports = Popup;
+const util = require('../util/util');
+const Evented = require('../util/evented');
+const DOM = require('../util/dom');
+const LngLat = require('../geo/lng_lat');
+const Point = require('point-geometry');
+const window = require('../util/window');
 
-var util = require('../util/util');
-var Evented = require('../util/evented');
-var DOM = require('../util/dom');
-var LngLat = require('../geo/lng_lat');
-var Point = require('point-geometry');
-var window = require('../util/window');
+const defaultOptions = {
+    closeButton: true,
+    closeOnClick: true
+};
 
 /**
  * A popup component.
  *
- * @class Popup
  * @param {Object} [options]
  * @param {boolean} [options.closeButton=true] If `true`, a close button will appear in the
  *   top right corner of the popup.
@@ -50,19 +52,15 @@ var window = require('../util/window');
  * @see [Display a popup on hover](https://www.mapbox.com/mapbox-gl-js/example/popup-on-hover/)
  * @see [Display a popup on click](https://www.mapbox.com/mapbox-gl-js/example/popup-on-click/)
  */
-function Popup(options) {
-    util.setOptions(this, options);
-    util.bindAll([
-        '_update',
-        '_onClickClose'],
-        this);
-}
-
-Popup.prototype = util.inherit(Evented, /** @lends Popup.prototype */{
-    options: {
-        closeButton: true,
-        closeOnClick: true
-    },
+class Popup extends Evented {
+    constructor(options) {
+        super();
+        this.options = util.extend(Object.create(defaultOptions), options);
+        util.bindAll([
+            '_update',
+            '_onClickClose'],
+            this);
+    }
 
     /**
      * Adds the popup to a map.
@@ -70,7 +68,7 @@ Popup.prototype = util.inherit(Evented, /** @lends Popup.prototype */{
      * @param {Map} map The Mapbox GL JS map to add the popup to.
      * @returns {Popup} `this`
      */
-    addTo: function(map) {
+    addTo(map) {
         this._map = map;
         this._map.on('move', this._update);
         if (this.options.closeOnClick) {
@@ -78,14 +76,14 @@ Popup.prototype = util.inherit(Evented, /** @lends Popup.prototype */{
         }
         this._update();
         return this;
-    },
+    }
 
     /**
      * @returns {boolean} `true` if the popup is open, `false` if it is closed.
      */
-    isOpen: function() {
+    isOpen() {
         return !!this._map;
-    },
+    }
 
     /**
      * Removes the popup from the map it has been added to.
@@ -95,7 +93,7 @@ Popup.prototype = util.inherit(Evented, /** @lends Popup.prototype */{
      * popup.remove();
      * @returns {Popup} `this`
      */
-    remove: function() {
+    remove() {
         if (this._content && this._content.parentNode) {
             this._content.parentNode.removeChild(this._content);
         }
@@ -123,16 +121,16 @@ Popup.prototype = util.inherit(Evented, /** @lends Popup.prototype */{
         this.fire('close');
 
         return this;
-    },
+    }
 
     /**
      * Returns the geographical location of the popup's anchor.
      *
      * @returns {LngLat} The geographical location of the popup's anchor.
      */
-    getLngLat: function() {
+    getLngLat() {
         return this._lngLat;
-    },
+    }
 
     /**
      * Sets the geographical location of the popup's anchor, and moves the popup to it.
@@ -140,11 +138,11 @@ Popup.prototype = util.inherit(Evented, /** @lends Popup.prototype */{
      * @param {LngLatLike} lnglat The geographical location to set as the popup's anchor.
      * @returns {Popup} `this`
      */
-    setLngLat: function(lnglat) {
+    setLngLat(lnglat) {
         this._lngLat = LngLat.convert(lnglat);
         this._update();
         return this;
-    },
+    }
 
     /**
      * Sets the popup's content to a string of text.
@@ -161,9 +159,9 @@ Popup.prototype = util.inherit(Evented, /** @lends Popup.prototype */{
      *   .setText('Hello, world!')
      *   .addTo(map);
      */
-    setText: function(text) {
+    setText(text) {
         return this.setDOMContent(window.document.createTextNode(text));
-    },
+    }
 
     /**
      * Sets the popup's content to the HTML provided as a string.
@@ -171,9 +169,10 @@ Popup.prototype = util.inherit(Evented, /** @lends Popup.prototype */{
      * @param {string} html A string representing HTML content for the popup.
      * @returns {Popup} `this`
      */
-    setHTML: function(html) {
-        var frag = window.document.createDocumentFragment();
-        var temp = window.document.createElement('body'), child;
+    setHTML(html) {
+        const frag = window.document.createDocumentFragment();
+        const temp = window.document.createElement('body');
+        let child;
         temp.innerHTML = html;
         while (true) {
             child = temp.firstChild;
@@ -182,7 +181,7 @@ Popup.prototype = util.inherit(Evented, /** @lends Popup.prototype */{
         }
 
         return this.setDOMContent(frag);
-    },
+    }
 
     /**
      * Sets the popup's content to the element provided as a DOM node.
@@ -198,14 +197,14 @@ Popup.prototype = util.inherit(Evented, /** @lends Popup.prototype */{
      *   .setDOMContent(div)
      *   .addTo(map);
      */
-    setDOMContent: function(htmlNode) {
+    setDOMContent(htmlNode) {
         this._createContent();
         this._content.appendChild(htmlNode);
         this._update();
         return this;
-    },
+    }
 
-    _createContent: function() {
+    _createContent() {
         if (this._content && this._content.parentNode) {
             this._content.parentNode.removeChild(this._content);
         }
@@ -218,9 +217,9 @@ Popup.prototype = util.inherit(Evented, /** @lends Popup.prototype */{
             this._closeButton.innerHTML = '&#215;';
             this._closeButton.addEventListener('click', this._onClickClose);
         }
-    },
+    }
 
-    _update: function() {
+    _update() {
         if (!this._map || !this._lngLat || !this._content) { return; }
 
         if (!this._container) {
@@ -229,12 +228,12 @@ Popup.prototype = util.inherit(Evented, /** @lends Popup.prototype */{
             this._container.appendChild(this._content);
         }
 
-        var anchor = this.options.anchor;
-        var offset = normalizeOffset(this.options.offset);
-        var pos = this._map.project(this._lngLat).round();
+        let anchor = this.options.anchor;
+        const offset = normalizeOffset(this.options.offset);
+        const pos = this._map.project(this._lngLat).round();
 
         if (!anchor) {
-            var width = this._container.offsetWidth,
+            const width = this._container.offsetWidth,
                 height = this._container.offsetHeight;
 
             if (pos.y + offset.bottom.y < height) {
@@ -258,9 +257,9 @@ Popup.prototype = util.inherit(Evented, /** @lends Popup.prototype */{
             }
         }
 
-        var offsetedPos = pos.add(offset[anchor]);
+        const offsetedPos = pos.add(offset[anchor]);
 
-        var anchorTranslate = {
+        const anchorTranslate = {
             'top': 'translate(-50%,0)',
             'top-left': 'translate(0,0)',
             'top-right': 'translate(-100%,0)',
@@ -271,19 +270,19 @@ Popup.prototype = util.inherit(Evented, /** @lends Popup.prototype */{
             'right': 'translate(-100%,-50%)'
         };
 
-        var classList = this._container.classList;
-        for (var key in anchorTranslate) {
-            classList.remove('mapboxgl-popup-anchor-' + key);
+        const classList = this._container.classList;
+        for (const key in anchorTranslate) {
+            classList.remove(`mapboxgl-popup-anchor-${key}`);
         }
-        classList.add('mapboxgl-popup-anchor-' + anchor);
+        classList.add(`mapboxgl-popup-anchor-${anchor}`);
 
-        DOM.setTransform(this._container, anchorTranslate[anchor] + ' translate(' + offsetedPos.x + 'px,' + offsetedPos.y + 'px)');
-    },
+        DOM.setTransform(this._container, `${anchorTranslate[anchor]} translate(${offsetedPos.x}px,${offsetedPos.y}px)`);
+    }
 
-    _onClickClose: function() {
+    _onClickClose() {
         this.remove();
     }
-});
+}
 
 function normalizeOffset(offset) {
 
@@ -292,7 +291,7 @@ function normalizeOffset(offset) {
 
     } else if (typeof offset === 'number') {
         // input specifies a radius from which to calculate offsets at all positions
-        var cornerOffset = Math.round(Math.sqrt(0.5 * Math.pow(offset, 2)));
+        const cornerOffset = Math.round(Math.sqrt(0.5 * Math.pow(offset, 2)));
         return {
             'top': new Point(0, offset),
             'top-left': new Point(cornerOffset, cornerOffset),
@@ -306,7 +305,7 @@ function normalizeOffset(offset) {
 
     } else if (isPointLike(offset)) {
         // input specifies a single offset to be applied to all positions
-        var convertedOffset = Point.convert(offset);
+        const convertedOffset = Point.convert(offset);
         return {
             'top': convertedOffset,
             'top-left': convertedOffset,
@@ -336,3 +335,5 @@ function normalizeOffset(offset) {
 function isPointLike(input) {
     return input instanceof Point || Array.isArray(input);
 }
+
+module.exports = Popup;

@@ -1,13 +1,13 @@
 'use strict';
 
-var browser = require('../util/browser');
+const browser = require('../util/browser');
 
 module.exports = drawCircles;
 
 function drawCircles(painter, sourceCache, layer, coords) {
     if (painter.isOpaquePass) return;
 
-    var gl = painter.gl;
+    const gl = painter.gl;
 
     painter.setDepthSublayer(0);
     painter.depthMask(false);
@@ -16,22 +16,18 @@ function drawCircles(painter, sourceCache, layer, coords) {
     // large circles are not clipped to tiles
     gl.disable(gl.STENCIL_TEST);
 
-    for (var i = 0; i < coords.length; i++) {
-        var coord = coords[i];
+    for (let i = 0; i < coords.length; i++) {
+        const coord = coords[i];
 
-        var tile = sourceCache.getTile(coord);
-        var bucket = tile.getBucket(layer);
+        const tile = sourceCache.getTile(coord);
+        const bucket = tile.getBucket(layer);
         if (!bucket) continue;
-        var bufferGroups = bucket.bufferGroups.circle;
-        if (!bufferGroups) continue;
 
-        var programOptions = bucket.paintAttributes.circle[layer.id];
-        var program = painter.useProgram(
-            'circle',
-            programOptions.defines,
-            programOptions.vertexPragmas,
-            programOptions.fragmentPragmas
-        );
+        const buffers = bucket.buffers;
+        const layerData = buffers.layerData[layer.id];
+        const programConfiguration = layerData.programConfiguration;
+        const program = painter.useProgram('circle', programConfiguration);
+        programConfiguration.setUniforms(gl, program, layer, {zoom: painter.transform.zoom});
 
         if (layer.paint['circle-pitch-scale'] === 'map') {
             gl.uniform1i(program.u_scale_with_map, true);
@@ -52,12 +48,9 @@ function drawCircles(painter, sourceCache, layer, coords) {
             layer.paint['circle-translate-anchor']
         ));
 
-        bucket.setUniforms(gl, 'circle', program, layer, {zoom: painter.transform.zoom});
-
-        for (var k = 0; k < bufferGroups.length; k++) {
-            var group = bufferGroups[k];
-            group.vaos[layer.id].bind(gl, program, group.layoutVertexBuffer, group.elementBuffer, group.paintVertexBuffers[layer.id]);
-            gl.drawElements(gl.TRIANGLES, group.elementBuffer.length * 3, gl.UNSIGNED_SHORT, 0);
+        for (const segment of buffers.segments) {
+            segment.vaos[layer.id].bind(gl, program, buffers.layoutVertexBuffer, buffers.elementBuffer, layerData.paintVertexBuffer, segment.vertexOffset);
+            gl.drawElements(gl.TRIANGLES, segment.primitiveLength * 3, gl.UNSIGNED_SHORT, segment.primitiveOffset * 3 * 2);
         }
     }
 }

@@ -1,29 +1,27 @@
 'use strict';
 
-var styleSpec = require('./style_spec');
-var util = require('../util/util');
-var Evented = require('../util/evented');
-var validateStyle = require('./validate_style');
-var StyleDeclaration = require('./style_declaration');
-var StyleTransition = require('./style_transition');
+const styleSpec = require('./style_spec');
+const util = require('../util/util');
+const Evented = require('../util/evented');
+const validateStyle = require('./validate_style');
+const StyleDeclaration = require('./style_declaration');
+const StyleTransition = require('./style_transition');
+
+const TRANSITION_SUFFIX = '-transition';
 
 /*
  * Represents the light used to light extruded features.
  */
-module.exports = Light;
+class Light extends Evented {
 
-var TRANSITION_SUFFIX = '-transition';
+    constructor(lightOptions) {
+        super();
+        this.properties = ['anchor', 'color', 'position', 'intensity'];
+        this._specifications = styleSpec.light;
+        this.set(lightOptions);
+    }
 
-function Light(lightOptions) {
-    this.set(lightOptions);
-}
-
-Light.prototype = util.inherit(Evented, {
-    properties: ['anchor', 'color', 'position', 'intensity'],
-
-    _specifications: styleSpec.$root.light,
-
-    set: function(lightOpts) {
+    set(lightOpts) {
         if (this._validate(validateStyle.light, lightOpts)) return;
         this._declarations = {};
         this._transitions = {};
@@ -37,25 +35,23 @@ Light.prototype = util.inherit(Evented, {
             intensity: this._specifications.intensity.default
         }, lightOpts);
 
-        for (var p in this.properties) {
-            var prop = this.properties[p];
-
+        for (const prop of this.properties) {
             this._declarations[prop] = new StyleDeclaration(this._specifications[prop], lightOpts[prop]);
         }
 
         return this;
-    },
+    }
 
-    getLight: function() {
+    getLight() {
         return {
             anchor: this.getLightProperty('anchor'),
             color: this.getLightProperty('color'),
             position: this.getLightProperty('position'),
             intensity: this.getLightProperty('intensity')
         };
-    },
+    }
 
-    getLightProperty: function(property) {
+    getLightProperty(property) {
         if (util.endsWith(property, TRANSITION_SUFFIX)) {
             return (
                 this._transitionOptions[property]
@@ -66,11 +62,11 @@ Light.prototype = util.inherit(Evented, {
                 this._declarations[property].value
             );
         }
-    },
+    }
 
-    getLightValue: function(property, globalProperties) {
+    getLightValue(property, globalProperties) {
         if (property === 'position') {
-            var calculated = this._transitions[property].calculate(globalProperties),
+            const calculated = this._transitions[property].calculate(globalProperties),
                 cartesian = util.sphericalToCartesian(calculated);
             return {
                 x: cartesian[0],
@@ -80,13 +76,13 @@ Light.prototype = util.inherit(Evented, {
         }
 
         return this._transitions[property].calculate(globalProperties);
-    },
+    }
 
-    setLight: function(options) {
+    setLight(options) {
         if (this._validate(validateStyle.light, options)) return;
 
-        for (var key in options) {
-            var value = options[key];
+        for (const key in options) {
+            const value = options[key];
 
             if (util.endsWith(key, TRANSITION_SUFFIX)) {
                 this._transitionOptions[key] = value;
@@ -96,17 +92,17 @@ Light.prototype = util.inherit(Evented, {
                 this._declarations[key] = new StyleDeclaration(this._specifications[key], value);
             }
         }
-    },
+    }
 
-    recalculate: function(zoom, zoomHistory) {
-        for (var property in this._declarations) {
-            this.calculated[property] = this.getLightValue(property, {zoom: zoom, zoomHistory: zoomHistory});
+    recalculate(zoom) {
+        for (const property in this._declarations) {
+            this.calculated[property] = this.getLightValue(property, {zoom: zoom});
         }
-    },
+    }
 
-    _applyLightDeclaration: function(property, declaration, options, globalOptions, animationLoop) {
-        var oldTransition = options.transition ? this._transitions[property] : undefined;
-        var spec = this._specifications[property];
+    _applyLightDeclaration(property, declaration, options, globalOptions, animationLoop) {
+        const oldTransition = options.transition ? this._transitions[property] : undefined;
+        const spec = this._specifications[property];
 
         if (declaration === null || declaration === undefined) {
             declaration = new StyleDeclaration(spec, spec.default);
@@ -114,11 +110,11 @@ Light.prototype = util.inherit(Evented, {
 
         if (oldTransition && oldTransition.declaration.json === declaration.json) return;
 
-        var transitionOptions = util.extend({
+        const transitionOptions = util.extend({
             duration: 300,
             delay: 0
         }, globalOptions, this.getLightProperty(property + TRANSITION_SUFFIX));
-        var newTransition = this._transitions[property] =
+        const newTransition = this._transitions[property] =
             new StyleTransition(spec, declaration, oldTransition, transitionOptions);
         if (!newTransition.instant()) {
             newTransition.loopID = animationLoop.set(newTransition.endTime - Date.now());
@@ -127,21 +123,23 @@ Light.prototype = util.inherit(Evented, {
         if (oldTransition) {
             animationLoop.cancel(oldTransition.loopID);
         }
-    },
+    }
 
-    updateLightTransitions: function(options, globalOptions, animationLoop) {
-        var property;
+    updateLightTransitions(options, globalOptions, animationLoop) {
+        let property;
         for (property in this._declarations) {
             this._applyLightDeclaration(property, this._declarations[property], options, globalOptions, animationLoop);
         }
-    },
+    }
 
-    _validate: function(validate, value) {
+    _validate(validate, value) {
         return validateStyle.emitErrors(this, validate.call(validateStyle, util.extend({
             value: value,
             // Workaround for https://github.com/mapbox/mapbox-gl-js/issues/2407
             style: {glyphs: true, sprite: true},
             styleSpec: styleSpec
         })));
-    },
-});
+    }
+}
+
+module.exports = Light;

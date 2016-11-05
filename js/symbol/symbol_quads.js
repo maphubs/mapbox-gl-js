@@ -1,9 +1,8 @@
 'use strict';
 
-var StructArrayType = require('../util/struct_array');
-var util = require('../util/util');
-var Point = require('point-geometry');
-var SymbolQuad = require('./quads').SymbolQuad;
+const createStructArrayType = require('../util/struct_array');
+const Point = require('point-geometry');
+const SymbolQuad = require('./quads').SymbolQuad;
 
 // notes from ansis on slack:
 // it would be best if they are added to a buffer in advance so that they are only created once. There would be a separate buffer with all the individual collision boxes and then SymbolInstance would store the beginning and end indexes of a feature's collisionboxes. CollisionFeature wouldn't really exist as a standalone thing, it would just be a range of boxes in the big collision box buffer
@@ -18,7 +17,7 @@ var SymbolQuad = require('./quads').SymbolQuad;
  * @private
  */
 
-var SymbolQuadsArray = module.exports = new StructArrayType({
+const SymbolQuadsArray = createStructArrayType({
     members: [
         // the quad is centered around the anchor point
         { type: 'Int16', name: 'anchorPointX' },
@@ -52,11 +51,12 @@ var SymbolQuadsArray = module.exports = new StructArrayType({
     ]
 });
 
-util.extendAll(SymbolQuadsArray.prototype.StructType.prototype, {
-    get anchorPoint() {
-        return new Point(this.anchorPointX, this.anchorPointY);
-    },
-    get SymbolQuad() {
+Object.defineProperty(SymbolQuadsArray.prototype.StructType.prototype, 'anchorPoint', {
+    get() { return new Point(this.anchorPointX, this.anchorPointY); }
+});
+
+Object.defineProperty(SymbolQuadsArray.prototype.StructType.prototype, 'SymbolQuad', {
+    get() {
         return new SymbolQuad(this.anchorPoint,
             new Point(this.tlX, this.tlY),
             new Point(this.trX, this.trY),
@@ -70,3 +70,4 @@ util.extendAll(SymbolQuadsArray.prototype.StructType.prototype, {
     }
 });
 
+module.exports = SymbolQuadsArray;

@@ -1,10 +1,10 @@
 'use strict';
-var util = require('../util/util');
-var ajax = require('../util/ajax');
-var browser = require('../util/browser');
+const util = require('../util/util');
+const ajax = require('../util/ajax');
+const browser = require('../util/browser');
 
 //Contains code from esri-leaflet https://github.com/Esri/esri-leaflet
-var MercatorZoomLevels = {
+const MercatorZoomLevels = {
     '0': 156543.03392799999,
     '1': 78271.516963999893,
     '2': 39135.758482000099,
@@ -31,33 +31,33 @@ var MercatorZoomLevels = {
     '23': 0.0186613838529763
 };
 
-var _withinPercentage = function (a, b, percentage) {
-    var diff = Math.abs((a / b) - 1);
+const _withinPercentage = function (a, b, percentage) {
+    const diff = Math.abs((a / b) - 1);
     return diff < percentage;
 };
 
 module.exports = function(options, callback) {
-    var loaded = function(err, metadata) {
+    const loaded = function(err, metadata) {
         if (err) {
             return callback(err);
         }
 
-        var result = util.pick(metadata,
+        const result = util.pick(metadata,
             ['tileInfo', 'initialExtent', 'spatialReference', 'tileServers', 'documentInfo']);
 
         result._lodMap = {};
-        var zoomOffsetAllowance = 0.1;
-        var sr = metadata.spatialReference.latestWkid || metadata.spatialReference.wkid;
+        const zoomOffsetAllowance = 0.1;
+        const sr = metadata.spatialReference.latestWkid || metadata.spatialReference.wkid;
         if (sr === 102100 || sr === 3857) {
           // create the zoom level data
-            var arcgisLODs = metadata.tileInfo.lods;
-            var correctResolutions = MercatorZoomLevels;
+            const arcgisLODs = metadata.tileInfo.lods;
+            const correctResolutions = MercatorZoomLevels;
             result.minzoom = arcgisLODs[0].level;
             result.maxzoom = arcgisLODs[arcgisLODs.length - 1].level;
-            for (var i = 0; i < arcgisLODs.length; i++) {
-                var arcgisLOD = arcgisLODs[i];
-                for (var ci in correctResolutions) {
-                    var correctRes = correctResolutions[ci];
+            for (let i = 0; i < arcgisLODs.length; i++) {
+                const arcgisLOD = arcgisLODs[i];
+                for (const ci in correctResolutions) {
+                    const correctRes = correctResolutions[ci];
 
                     if (_withinPercentage(arcgisLOD.resolution, correctRes, zoomOffsetAllowance)) {
                         result._lodMap[ci] = arcgisLOD.level;

@@ -23,8 +23,11 @@ const _template = function (str, data) {
 
 //From https://github.com/Leaflet/Leaflet/blob/master/src/layer/tile/TileLayer.js
 const _getSubdomain = function (tilePoint, subdomains) {
-    const index = Math.abs(tilePoint.x + tilePoint.y) % subdomains.length;
-    return subdomains[index];
+    if (subdomains) {
+        const index = Math.abs(tilePoint.x + tilePoint.y) % subdomains.length;
+        return subdomains[index];
+    }
+    return null;
 };
 
 class ArcGISRasterTileSource extends Evented {

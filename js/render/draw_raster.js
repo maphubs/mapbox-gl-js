@@ -36,7 +36,7 @@ function drawRasterTile(painter, sourceCache, layer, coord) {
     const tile = sourceCache.getTile(coord);
     const posMatrix = painter.transform.calculatePosMatrix(coord, sourceCache.getSource().maxzoom);
 
-    tile.setAnimationLoop(painter.style.animationLoop, layer.paint['raster-fade-duration']);
+    tile.setAnimationLoop(painter.style.animationLoop, 0);
 
     const program = painter.useProgram('raster');
     gl.uniformMatrix4fv(program.u_matrix, false, posMatrix);
@@ -107,7 +107,7 @@ function saturationFactor(saturation) {
 
 function getOpacities(tile, parentTile, layer, transform) {
     const opacities = [1, 0];
-    const fadeDuration = layer.paint['raster-fade-duration'];
+    const fadeDuration = 0;
 
     if (tile.sourceCache && fadeDuration > 0) {
         const now = Date.now();

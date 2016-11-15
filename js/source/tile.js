@@ -41,12 +41,12 @@ class Tile {
         this.state = 'loading';
     }
 
+
     setAnimationLoop(animationLoop, t) {
-        this.animationLoopEndTime = t + Date.now();
-        if (this.animationLoopId !== undefined) {
-            animationLoop.cancel(this.animationLoopId);
+        if (this.animationLoopId === undefined) {
+            this.animationLoopEndTime = t + Date.now();
+            this.animationLoopId = animationLoop.set(t);
         }
-        this.animationLoopId = animationLoop.set(t);
     }
 
     /**

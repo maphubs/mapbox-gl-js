@@ -35,6 +35,7 @@ class ArcGISRasterTileSource extends Evented {
     constructor(id, options, dispatcher, eventedParent) {
         super();
         this.id = id;
+        this.dispatcher = dispatcher;
 
         this.minzoom = 0;
         this.maxzoom = 22;
@@ -99,10 +100,13 @@ class ArcGISRasterTileSource extends Evented {
         function done(err, img) {
             delete tile.request;
 
-            if (tile.aborted)
-                return;
+            if (tile.aborted) {
+                this.state = 'unloaded';
+                return callback(null);
+            }
 
             if (err) {
+                this.state = 'errored';
                 return callback(err);
             }
 
@@ -123,8 +127,6 @@ class ArcGISRasterTileSource extends Evented {
                 tile.texture.size = img.width;
             }
             gl.generateMipmap(gl.TEXTURE_2D);
-
-            this.map.animationLoop.set(this.map.style.rasterFadeDuration);
 
             tile.state = 'loaded';
 

@@ -11,51 +11,18 @@ const assert = require('assert');
 const EARCUT_MAX_RINGS = 500;
 
 const fillExtrusionInterface = {
-    layoutVertexArrayType: createVertexArrayType([{
-        name: 'a_pos',
-        components: 2,
-        type: 'Int16'
-    }, {
-        name: 'a_normal',
-        components: 3,
-        type: 'Int16'
-    }, {
-        name: 'a_edgedistance',
-        components: 1,
-        type: 'Int16'
-    }]),
+    layoutVertexArrayType: createVertexArrayType([
+        {name: 'a_pos',          components: 2, type: 'Int16'},
+        {name: 'a_normal',       components: 3, type: 'Int16'},
+        {name: 'a_edgedistance', components: 1, type: 'Int16'}
+    ]),
     elementArrayType: createElementArrayType(3),
 
-    paintAttributes: [{
-        name: 'a_base',
-        components: 1,
-        type: 'Uint16',
-        getValue: (layer, globalProperties, featureProperties) => {
-            return [Math.max(layer.getPaintValue("fill-extrusion-base", globalProperties, featureProperties), 0)];
-        },
-        multiplier: 1,
-        paintProperty: 'fill-extrusion-base'
-    }, {
-        name: 'a_height',
-        components: 1,
-        type: 'Uint16',
-        getValue: (layer, globalProperties, featureProperties) => {
-            return [Math.max(layer.getPaintValue("fill-extrusion-height", globalProperties, featureProperties), 0)];
-        },
-        multiplier: 1,
-        paintProperty: 'fill-extrusion-height'
-    }, {
-        name: 'a_color',
-        components: 4,
-        type: 'Uint8',
-        getValue: (layer, globalProperties, featureProperties) => {
-            const color = layer.getPaintValue("fill-extrusion-color", globalProperties, featureProperties);
-            color[3] = 1.0;
-            return color;
-        },
-        multiplier: 255,
-        paintProperty: 'fill-extrusion-color'
-    }]
+    paintAttributes: [
+        {property: 'fill-extrusion-base',   type: 'Uint16'},
+        {property: 'fill-extrusion-height', type: 'Uint16'},
+        {property: 'fill-extrusion-color',  type: 'Uint8'}
+    ]
 };
 
 const FACTOR = Math.pow(2, 13);

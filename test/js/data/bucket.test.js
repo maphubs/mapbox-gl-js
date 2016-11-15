@@ -22,9 +22,9 @@ test('Bucket', (t) => {
     }
 
     const dataDrivenPaint = {
-        'circle-color': {
-            stops: [[0, 'red'], [100, 'violet']],
-            property: 'mapbox'
+        'circle-opacity': {
+            stops: [[0, 0], [100, 100]],
+            property: 'x'
         }
     };
 
@@ -43,12 +43,8 @@ test('Bucket', (t) => {
             elementArrayType2: createElementArrayType(2),
 
             paintAttributes: options.paintAttributes || [{
-                name: 'a_map',
-                type: 'Int16',
-                getValue: function(layer, globalProperties, featureProperties) {
-                    return [featureProperties.x];
-                },
-                paintProperty: 'circle-color'
+                property: 'circle-opacity',
+                type: 'Int16'
             }]
         };
 
@@ -99,7 +95,7 @@ test('Bucket', (t) => {
         const paintVertex = bucket.arrays.layerData.layerid.paintVertexArray;
         t.equal(paintVertex.length, 1);
         const p0 = paintVertex.get(0);
-        t.equal(p0.a_map, 17);
+        t.equal(p0.a_opacity, 17);
 
         const testElement = bucket.arrays.elementArray;
         t.equal(testElement.length, 1);
@@ -128,8 +124,8 @@ test('Bucket', (t) => {
         const v0 = bucket.arrays.layoutVertexArray.get(0);
         const a0 = bucket.arrays.layerData.one.paintVertexArray.get(0);
         const b0 = bucket.arrays.layerData.two.paintVertexArray.get(0);
-        t.equal(a0.a_map, 17);
-        t.equal(b0.a_map, 17);
+        t.equal(a0.a_opacity, 17);
+        t.equal(b0.a_opacity, 17);
         t.equal(v0.a_box0, 34);
         t.equal(v0.a_box1, 84);
 
@@ -139,10 +135,8 @@ test('Bucket', (t) => {
     t.test('add features, disabled attribute', (t) => {
         const bucket = create({
             paintAttributes: [{
-                name: 'a_map',
-                type: 'Int16',
-                getValue: function() { return [5]; },
-                paintProperty: 'circle-color'
+                property: 'circle-opacity',
+                type: 'Int16'
             }],
             layoutAttributes: [],
             layers: [
@@ -153,11 +147,6 @@ test('Bucket', (t) => {
         bucket.populate([createFeature(17, 42)], createOptions());
 
         t.equal(bucket.arrays.layoutVertexArray.bytesPerElement, 0);
-        t.deepEqual(
-            bucket.arrays.layerData.one.programConfiguration.uniforms[0].getValue.call(bucket),
-            [5]
-        );
-
         t.end();
     });
 

@@ -40,25 +40,13 @@ const LINE_DISTANCE_SCALE = 1 / 2;
 const MAX_LINE_DISTANCE = Math.pow(2, LINE_DISTANCE_BUFFER_BITS - 1) / LINE_DISTANCE_SCALE;
 
 const lineInterface = {
-    layoutVertexArrayType: createVertexArrayType([{
-        name: 'a_pos',
-        components: 2,
-        type: 'Int16'
-    }, {
-        name: 'a_data',
-        components: 4,
-        type: 'Uint8'
-    }]),
-    paintAttributes: [{
-        name: 'a_color',
-        components: 4,
-        type: 'Uint8',
-        getValue: (layer, globalProperties, featureProperties) => {
-            return layer.getPaintValue("line-color", globalProperties, featureProperties);
-        },
-        multiplier: 255,
-        paintProperty: 'line-color'
-    }],
+    layoutVertexArrayType: createVertexArrayType([
+        {name: 'a_pos',  components: 2, type: 'Int16'},
+        {name: 'a_data', components: 4, type: 'Uint8'}
+    ]),
+    paintAttributes: [
+        {property: 'line-color', type: 'Uint8'}
+    ],
     elementArrayType: createElementArrayType()
 };
 

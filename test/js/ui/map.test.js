@@ -459,6 +459,14 @@ test('Map', (t) => {
         t.end();
     });
 
+    t.test('#getMinZoom', (t) => {
+        const map = createMap({zoom: 0});
+        t.equal(map.getMinZoom(), 0, 'returns default value');
+        map.setMinZoom(10);
+        t.equal(map.getMinZoom(), 10, 'returns custom value');
+        t.end();
+    });
+
     t.test('ignore minZooms over maxZoom', (t) => {
         const map = createMap({zoom:2, maxZoom:5});
         t.throws(() => {
@@ -485,6 +493,14 @@ test('Map', (t) => {
         t.end();
     });
 
+    t.test('#getMaxZoom', (t) => {
+        const map = createMap({zoom: 0});
+        t.equal(map.getMaxZoom(), 20, 'returns default value');
+        map.setMaxZoom(10);
+        t.equal(map.getMaxZoom(), 10, 'returns custom value');
+        t.end();
+    });
+
     t.test('ignore maxZooms over minZoom', (t) => {
         const map = createMap({minZoom:5});
         t.throws(() => {
@@ -506,12 +522,28 @@ test('Map', (t) => {
     t.test('#addControl', (t) => {
         const map = createMap();
         const control = {
-            addTo: function(_) {
+            onAdd: function(_) {
                 t.equal(map, _, 'addTo() called with map');
+                t.end();
+                return window.document.createElement('div');
+            }
+        };
+        map.addControl(control);
+    });
+
+    t.test('#removeControl', (t) => {
+        const map = createMap();
+        const control = {
+            onAdd: function() {
+                return window.document.createElement('div');
+            },
+            onRemove: function(_) {
+                t.equal(map, _, 'onRemove() called with map');
                 t.end();
             }
         };
         map.addControl(control);
+        map.removeControl(control);
     });
 
     t.test('#addClass', (t) => {

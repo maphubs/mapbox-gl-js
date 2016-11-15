@@ -12,6 +12,8 @@ const VertexArrayObject = require('./vertex_array_object');
 const RasterBoundsArray = require('../data/raster_bounds_array');
 const PosArray = require('../data/pos_array');
 const ProgramConfiguration = require('../data/program_configuration');
+const shaders = require('mapbox-gl-shaders');
+const assert = require('assert');
 
 const draw = {
     symbol: require('./draw_symbol'),
@@ -49,11 +51,8 @@ class Painter {
 
         this.lineWidthRange = gl.getParameter(gl.ALIASED_LINE_WIDTH_RANGE);
 
-        this.basicFillProgramConfiguration = ProgramConfiguration.createStatic([
-            {name: 'u_color', components: 4},
-            {name: 'u_opacity', components: 1}
-        ]);
-        this.emptyProgramConfiguration = ProgramConfiguration.createStatic([]);
+        this.basicFillProgramConfiguration = ProgramConfiguration.createStatic(['color', 'opacity']);
+        this.emptyProgramConfiguration = new ProgramConfiguration();
     }
 
     /*
@@ -118,23 +117,7 @@ class Painter {
      */
     clearColor() {
         const gl = this.gl;
-        const firstGroup = this.style._groups[0];
-        const background = firstGroup && firstGroup[0].type === 'background' ? firstGroup[0] : null;
-
-        // if the bottommost layer is a solid background, use its color for clearColor
-        // to avoid rendering with full quads later
-        if (background && !background.paint['background-pattern'] && !background.isHidden()) {
-            const color = background.paint['background-color'];
-            const opacity = background.paint['background-opacity'];
-            gl.clearColor(
-                color[0] * opacity,
-                color[1] * opacity,
-                color[2] * opacity,
-                color[3] * opacity);
-        } else {
-            gl.clearColor(0, 0, 0, 0);
-        }
-
+        gl.clearColor(0, 0, 0, 0);
         gl.clear(gl.COLOR_BUFFER_BIT);
     }
 
@@ -375,23 +358,60 @@ class Painter {
         }
     }
 
-    _createProgramCached(name, paintAttributeSet) {
+    createProgram(name, configuration) {
+        const gl = this.gl;
+        const program = gl.createProgram();
+        const definition = shaders[name];
+
+        let definesSource = '#define MAPBOX_GL_JS;\n';
+        if (this._showOverdrawInspector) {
+            definesSource += '#define OVERDRAW_INSPECTOR;\n';
+        }
+
+        const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fragmentShader, configuration.applyPragmas(definesSource + shaders.prelude.fragmentSource + definition.fragmentSource, 'fragment'));
+        gl.compileShader(fragmentShader);
+        assert(gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS), gl.getShaderInfoLog(fragmentShader));
+        gl.attachShader(program, fragmentShader);
+
+        const vertexShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vertexShader, configuration.applyPragmas(definesSource + shaders.prelude.vertexSource + definition.vertexSource, 'vertex'));
+        gl.compileShader(vertexShader);
+        assert(gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS), gl.getShaderInfoLog(vertexShader));
+        gl.attachShader(program, vertexShader);
+
+        gl.linkProgram(program);
+        assert(gl.getProgramParameter(program, gl.LINK_STATUS), gl.getProgramInfoLog(program));
+
+        const numAttributes = gl.getProgramParameter(program, gl.ACTIVE_ATTRIBUTES);
+        const result = {program, numAttributes};
+
+        for (let i = 0; i < numAttributes; i++) {
+            const attribute = gl.getActiveAttrib(program, i);
+            result[attribute.name] = gl.getAttribLocation(program, attribute.name);
+        }
+        const numUniforms = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
+        for (let i = 0; i < numUniforms; i++) {
+            const uniform = gl.getActiveUniform(program, i);
+            result[uniform.name] = gl.getUniformLocation(program, uniform.name);
+        }
+        return result;
+    }
+
+    _createProgramCached(name, programConfiguration) {
         this.cache = this.cache || {};
-        const key = `${name}${paintAttributeSet.cacheKey}${!!this._showOverdrawInspector}`;
+        const key = `${name}${programConfiguration.cacheKey || ''}${this._showOverdrawInspector ? '/overdraw' : ''}`;
         if (!this.cache[key]) {
-            this.cache[key] = paintAttributeSet.createProgram(name, this._showOverdrawInspector, this.gl);
+            this.cache[key] = this.createProgram(name, programConfiguration);
         }
         return this.cache[key];
     }
 
-    useProgram(name, paintAttributeSet) {
+    useProgram(name, programConfiguration) {
         const gl = this.gl;
+        const nextProgram = this._createProgramCached(name, programConfiguration || this.emptyProgramConfiguration);
 
-        const nextProgram = this._createProgramCached(name,
-            paintAttributeSet || this.emptyProgramConfiguration);
-        const previousProgram = this.currentProgram;
-
-        if (previousProgram !== nextProgram) {
+        if (this.currentProgram !== nextProgram) {
             gl.useProgram(nextProgram.program);
             this.currentProgram = nextProgram;
         }

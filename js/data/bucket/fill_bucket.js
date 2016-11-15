@@ -10,42 +10,17 @@ const assert = require('assert');
 const EARCUT_MAX_RINGS = 500;
 
 const fillInterface = {
-    layoutVertexArrayType: createVertexArrayType([{
-        name: 'a_pos',
-        components: 2,
-        type: 'Int16'
-    }]),
+    layoutVertexArrayType: createVertexArrayType([
+        {name: 'a_pos', components: 2, type: 'Int16'}
+    ]),
     elementArrayType: createElementArrayType(3),
     elementArrayType2: createElementArrayType(2),
 
-    paintAttributes: [{
-        name: 'a_color',
-        components: 4,
-        type: 'Uint8',
-        getValue: (layer, globalProperties, featureProperties) => {
-            return layer.getPaintValue("fill-color", globalProperties, featureProperties);
-        },
-        multiplier: 255,
-        paintProperty: 'fill-color'
-    }, {
-        name: 'a_outline_color',
-        components: 4,
-        type: 'Uint8',
-        getValue: (layer, globalProperties, featureProperties) => {
-            return layer.getPaintValue("fill-outline-color", globalProperties, featureProperties);
-        },
-        multiplier: 255,
-        paintProperty: 'fill-outline-color'
-    }, {
-        name: 'a_opacity',
-        components: 1,
-        type: 'Uint8',
-        getValue: (layer, globalProperties, featureProperties) => {
-            return [layer.getPaintValue("fill-opacity", globalProperties, featureProperties)];
-        },
-        multiplier: 255,
-        paintProperty: 'fill-opacity'
-    }]
+    paintAttributes: [
+        {property: 'fill-color',         type: 'Uint8'},
+        {property: 'fill-outline-color', type: 'Uint8'},
+        {property: 'fill-opacity',       type: 'Uint8', multiplier: 255}
+    ]
 };
 
 class FillBucket extends Bucket {

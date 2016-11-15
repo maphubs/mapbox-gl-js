@@ -710,7 +710,7 @@ test('SourceCache#findLoadedParent', (t) => {
         t.end();
     });
 
-    t.test('adds from cache', (t) => {
+    t.test('retains parents', (t) => {
         const sourceCache = createSourceCache({});
         const tr = new Transform();
         tr.width = 512;
@@ -732,7 +732,6 @@ test('SourceCache#findLoadedParent', (t) => {
         t.equal(sourceCache.findLoadedParent(new TileCoord(2, 0, 0), 0, retain), tile);
         t.deepEqual(retain, expectedRetain);
         t.equal(sourceCache._cache.order.length, 0);
-        t.equal(sourceCache._tiles[tile.coord.id], tile);
 
         t.end();
     });
